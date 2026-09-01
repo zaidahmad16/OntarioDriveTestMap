@@ -1,0 +1,45 @@
+{
+  "_comment": "Corrections against extracted traces. A correction NEVER silently rewrites a trace. It marks segments as disputed so downstream steps can weight or exclude them, and so the dispute stays visible in the record. Provenance is required on both sides: what the source claimed, and who disputes it.",
+  "corrections": [
+    {
+      "id": "corr-001",
+      "created": "2026-09-01",
+      "target": {
+        "source_id": "reddit:jt7gwng#route1",
+        "centre_id": "walkley",
+        "test_class": "G2"
+      },
+      "disputed_segment": {
+        "turns": [
+          {"direction": "right", "street": "heron"},
+          {"direction": "right", "street": "sandalwood"},
+          {"direction": "left", "street": "baycrest"}
+        ],
+        "claim": "route continues north from baycrest to heron road, west along heron, south down sandalwood, back to baycrest"
+      },
+      "asserted_instead": {
+        "claim": "route stays on baycrest to the traffic light, turns left onto walkley, returns to the test centre",
+        "turns": [
+          {"direction": "left", "street": "walkley"},
+          {"direction": "straight", "street": "@centre"}
+        ]
+      },
+      "reporter": {
+        "kind": "local_knowledge",
+        "note": "project owner, familiar with the Walkley area"
+      },
+      "source_reliability_notes": {
+        "firsthand": false,
+        "detail": "jt7gwng is a relayed account. The author states in the same thread that they pulled the three routes from YouTube. Their own firsthand test, post 157tw7n, does not include the heron/sandalwood leg and matches the corrected description.",
+        "corroboration": "none - all four currently routed traces come from this single author"
+      },
+      "geometry_check": {
+        "drivable": true,
+        "detail": "sandalwood drive does connect heron road (node 903984315) to baycrest drive (node 903989000), so the claimed route is physically drivable. The dispute is whether it is used, not whether it exists."
+      },
+      "status": "disputed",
+      "resolution": null,
+      "resolves_when": "an independent firsthand account either names sandalwood or describes the baycrest-to-walkley ending"
+    }
+  ]
+}
