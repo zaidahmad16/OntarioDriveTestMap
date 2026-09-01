@@ -94,6 +94,14 @@ CREATE TABLE IF NOT EXISTS junction_streets (
     full       TEXT NOT NULL,
     way_id     INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS centres (
+    centre_id  TEXT PRIMARY KEY,
+    name       TEXT,
+    addr       TEXT,
+    lat        REAL NOT NULL,
+    lon        REAL NOT NULL,
+    osm_way_id INTEGER
+);
 CREATE INDEX IF NOT EXISTS ix_js_base ON junction_streets(base);
 CREATE INDEX IF NOT EXISTS ix_js_full ON junction_streets(full);
 CREATE INDEX IF NOT EXISTS ix_js_node ON junction_streets(node_id);
@@ -149,6 +157,38 @@ def build(pbf_path, db_path, keep_service=True):
     }
     print(f"  junction nodes:      {len(junction_ids):,}")
 
+    # Test centres. Every route in the corpus starts and ends at one, so
+    # the centre is the single location guaranteed to appear in every
+    # trace — and the only one not resolvable as a street junction.
+    # amenity=driver_testing is the OSM tag for these.
+    centres = []
+
+    class CentrePass(osmium.SimpleHandler):
+        def way(self, w):
+            if w.tags.get("amenity") != "driver_testing":
+                return
+            pts = [(n.lat, n.lon) for n in w.nodes if n.location.valid()]
+            if not pts:
+                return
+            centres.append((
+                (w.tags.get("name") or f"centre{w.id}").lower().replace(" ", ""),
+                w.tags.get("name"),
+                f"{w.tags.get('addr:housenumber','')} "
+                f"{w.tags.get('addr:street','')}".strip(),
+                sum(p[0] for p in pts) / len(pts),
+                sum(p[1] for p in pts) / len(pts),
+                w.id))
+
+        def node(self, n):
+            if n.tags.get("amenity") == "driver_testing" and n.location.valid():
+                centres.append((
+                    (n.tags.get("name") or f"centre{n.id}").lower().replace(" ", ""),
+                    n.tags.get("name"), "", n.location.lat, n.location.lon, n.id))
+
+    print("pass 1b: test centres")
+    CentrePass().apply_file(pbf_path, locations=True)
+    print(f"  found:               {len(centres)}")
+
     coords = {}
 
     class NodePass(osmium.SimpleHandler):
@@ -192,6 +232,13 @@ def build(pbf_path, db_path, keep_service=True):
         "INSERT INTO junction_streets (node_id, name, base, full, way_id) "
         "VALUES (?,?,?,?,?)", jsrows)
     con.commit()
+
+    if centres:
+        con.executemany(
+            "INSERT OR REPLACE INTO centres "
+            "(centre_id, name, addr, lat, lon, osm_way_id) VALUES (?,?,?,?,?,?)",
+            centres)
+        con.commit()
 
     n_streets = con.execute(
         "SELECT COUNT(DISTINCT base) FROM streets").fetchone()[0]

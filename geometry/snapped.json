@@ -1,0 +1,1303 @@
+[
+ {
+  "source_id": "reddit:1f31uny",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2024-08-30",
+  "author_hash": "",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "ensure"
+   },
+   {
+    "direction": "right",
+    "street": "ensure"
+   },
+   {
+    "direction": "right",
+    "street": "leave"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "ensure",
+     "leave"
+    ],
+    "reason": "unknown street: ensure"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:157tw7n",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2023-08-31",
+  "author_hash": "a_f36de34bd9d1",
+  "turns": [
+   {
+    "direction": "right",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "fairlea"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "baycrest"
+   },
+   {
+    "direction": "left",
+    "street": "cedarwood"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   }
+  ],
+  "status": "full",
+  "waypoints": [
+   {
+    "node_id": 489851260,
+    "lat": 45.377944,
+    "lon": -75.6449411,
+    "pair": [
+     "walkley",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "heatherington",
+     "fairlea"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "fairlea",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 4528701387,
+    "lat": 45.3778416,
+    "lon": -75.6448892,
+    "pair": [
+     "heatherington",
+     "walkley"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903989962,
+    "lat": 45.3761452,
+    "lon": -75.6493771,
+    "pair": [
+     "walkley",
+     "baycrest"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 903994594,
+    "lat": 45.3778979,
+    "lon": -75.6518052,
+    "pair": [
+     "baycrest",
+     "cedarwood"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901829890,
+    "lat": 45.374947,
+    "lon": -75.6523215,
+    "pair": [
+     "cedarwood",
+     "walkley"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": []
+ },
+ {
+  "source_id": "reddit:jt7gwng#route1",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2023-08-31",
+  "author_hash": "a_f36de34bd9d1",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "cedarwood"
+   },
+   {
+    "direction": "left",
+    "street": "baycrest"
+   },
+   {
+    "direction": "right",
+    "street": "heron"
+   },
+   {
+    "direction": "right",
+    "street": "sandalwood"
+   },
+   {
+    "direction": "left",
+    "street": "baycrest"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "fairlea"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   }
+  ],
+  "status": "full",
+  "waypoints": [
+   {
+    "node_id": 901829890,
+    "lat": 45.374947,
+    "lon": -75.6523215,
+    "pair": [
+     "walkley",
+     "cedarwood"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903994594,
+    "lat": 45.3778979,
+    "lon": -75.6518052,
+    "pair": [
+     "cedarwood",
+     "baycrest"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 3682004794,
+    "lat": 45.3795651,
+    "lon": -75.652833,
+    "pair": [
+     "baycrest",
+     "heron"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903984315,
+    "lat": 45.3799291,
+    "lon": -75.6489006,
+    "pair": [
+     "heron",
+     "sandalwood"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903989000,
+    "lat": 45.3771361,
+    "lon": -75.6502214,
+    "pair": [
+     "sandalwood",
+     "baycrest"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 903989962,
+    "lat": 45.3761452,
+    "lon": -75.6493771,
+    "pair": [
+     "baycrest",
+     "walkley"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 4528701387,
+    "lat": 45.3778416,
+    "lon": -75.6448892,
+    "pair": [
+     "walkley",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "heatherington",
+     "fairlea"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "fairlea",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 4528701387,
+    "lat": 45.3778416,
+    "lon": -75.6448892,
+    "pair": [
+     "heatherington",
+     "walkley"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": []
+ },
+ {
+  "source_id": "reddit:jt7gwng#route2",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2023-08-31",
+  "author_hash": "a_f36de34bd9d1",
+  "turns": [
+   {
+    "direction": "right",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "fairlea"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "baycrest"
+   },
+   {
+    "direction": "left",
+    "street": "cedarwood"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   }
+  ],
+  "status": "full",
+  "waypoints": [
+   {
+    "node_id": 489851260,
+    "lat": 45.377944,
+    "lon": -75.6449411,
+    "pair": [
+     "walkley",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "heatherington",
+     "fairlea"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "fairlea",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 4528701387,
+    "lat": 45.3778416,
+    "lon": -75.6448892,
+    "pair": [
+     "heatherington",
+     "walkley"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903989962,
+    "lat": 45.3761452,
+    "lon": -75.6493771,
+    "pair": [
+     "walkley",
+     "baycrest"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 903994594,
+    "lat": 45.3778979,
+    "lon": -75.6518052,
+    "pair": [
+     "baycrest",
+     "cedarwood"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901829890,
+    "lat": 45.374947,
+    "lon": -75.6523215,
+    "pair": [
+     "cedarwood",
+     "walkley"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": []
+ },
+ {
+  "source_id": "reddit:jt7gwng#route3",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2023-08-31",
+  "author_hash": "a_f36de34bd9d1",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "baycrest"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "fairlea"
+   },
+   {
+    "direction": "right",
+    "street": "heatherington"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   }
+  ],
+  "status": "full",
+  "waypoints": [
+   {
+    "node_id": 903989962,
+    "lat": 45.3761452,
+    "lon": -75.6493771,
+    "pair": [
+     "walkley",
+     "baycrest"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 903989962,
+    "lat": 45.3761452,
+    "lon": -75.6493771,
+    "pair": [
+     "baycrest",
+     "walkley"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 4528701387,
+    "lat": 45.3778416,
+    "lon": -75.6448892,
+    "pair": [
+     "walkley",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "heatherington",
+     "fairlea"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903993646,
+    "lat": 45.3769754,
+    "lon": -75.6443981,
+    "pair": [
+     "fairlea",
+     "heatherington"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 4528701387,
+    "lat": 45.3778416,
+    "lon": -75.6448892,
+    "pair": [
+     "heatherington",
+     "walkley"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": []
+ },
+ {
+  "source_id": "reddit:qrwxz3",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2021-08-31",
+  "author_hash": "a_6f7d39aa15c3",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "hampstead"
+   },
+   {
+    "direction": "left",
+    "street": "notting hill"
+   },
+   {
+    "direction": "right",
+    "street": "jasper"
+   },
+   {
+    "direction": "left",
+    "street": "kitchener"
+   },
+   {
+    "direction": "left",
+    "street": "albion"
+   },
+   {
+    "direction": "right",
+    "street": "walkley again"
+   }
+  ],
+  "status": "partial",
+  "waypoints": [
+   {
+    "node_id": 901851695,
+    "lat": 45.3705434,
+    "lon": -75.6575325,
+    "pair": [
+     "hampstead",
+     "notting hill"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901858015,
+    "lat": 45.3713913,
+    "lon": -75.6553751,
+    "pair": [
+     "notting hill",
+     "jasper"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901831481,
+    "lat": 45.3691393,
+    "lon": -75.6539759,
+    "pair": [
+     "jasper",
+     "kitchener"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901862786,
+    "lat": 45.3699269,
+    "lon": -75.652052,
+    "pair": [
+     "kitchener",
+     "albion"
+    ],
+    "candidates": 1
+   }
+  ],
+  "misses": [
+   {
+    "pair": [
+     "albion",
+     "walkley again"
+    ],
+    "reason": "unknown street: walkley again"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:c9ze5zi",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.35,
+  "observed_at": "2013-09-02",
+  "author_hash": "a_deb074701c31",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "hunt club"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "hunt club"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:h9vdcv2",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.5,
+  "observed_at": "2021-08-31",
+  "author_hash": "a_e8d5016a8e3e",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "right",
+    "street": "cedarwood"
+   },
+   {
+    "direction": "left",
+    "street": "baycrest"
+   },
+   {
+    "direction": "right",
+    "street": "heron"
+   },
+   {
+    "direction": "left",
+    "street": "briar hill"
+   },
+   {
+    "direction": "left",
+    "street": "amberdale"
+   },
+   {
+    "direction": "left",
+    "street": "heron"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   }
+  ],
+  "status": "partial",
+  "waypoints": [
+   {
+    "node_id": 901829890,
+    "lat": 45.374947,
+    "lon": -75.6523215,
+    "pair": [
+     "walkley",
+     "cedarwood"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903994594,
+    "lat": 45.3778979,
+    "lon": -75.6518052,
+    "pair": [
+     "cedarwood",
+     "baycrest"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 3682004794,
+    "lat": 45.3795651,
+    "lon": -75.652833,
+    "pair": [
+     "baycrest",
+     "heron"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 903984315,
+    "lat": 45.3799291,
+    "lon": -75.6489006,
+    "pair": [
+     "heron",
+     "briar hill"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 903994549,
+    "lat": 45.3815916,
+    "lon": -75.6487365,
+    "pair": [
+     "briar hill",
+     "amberdale"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": [
+   {
+    "pair": [
+     "amberdale",
+     "heron"
+    ],
+    "reason": "streets exist but do not intersect"
+   },
+   {
+    "pair": [
+     "heron",
+     "walkley"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:cwhd33t",
+  "centre_id": "walkley",
+  "test_class": "ambiguous",
+  "reliability": 0.5,
+  "observed_at": "2015-09-02",
+  "author_hash": "a_1e8e3502042e",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "straight",
+    "street": "airport parkway"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "airport parkway"
+    ],
+    "reason": "streets exist but do not intersect"
+   },
+   {
+    "pair": [
+     "airport parkway",
+     "walkley"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:di5cn19",
+  "centre_id": "walkley",
+  "test_class": "G2",
+  "reliability": 0.35,
+  "observed_at": "2017-09-01",
+  "author_hash": "",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "straight",
+    "street": "walkley"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": []
+ },
+ {
+  "source_id": "reddit:lc9eisv",
+  "centre_id": "walkley",
+  "test_class": "ambiguous",
+  "reliability": 0.5,
+  "observed_at": "2024-08-30",
+  "author_hash": "a_0fb4ee242e18",
+  "turns": [
+   {
+    "direction": "right",
+    "street": "walkley"
+   },
+   {
+    "direction": "left",
+    "street": "get"
+   },
+   {
+    "direction": "straight",
+    "street": "airport parkway"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "get"
+    ],
+    "reason": "unknown street: get"
+   },
+   {
+    "pair": [
+     "get",
+     "airport parkway"
+    ],
+    "reason": "unknown street: get"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:dkswtcc",
+  "centre_id": "walkley",
+  "test_class": "unknown",
+  "reliability": 0.5,
+  "observed_at": "2017-09-01",
+  "author_hash": "a_d5f214a1aa38",
+  "turns": [
+   {
+    "direction": "right",
+    "street": "walkley"
+   },
+   {
+    "direction": "left",
+    "street": "hunt club"
+   },
+   {
+    "direction": "left",
+    "street": "bank"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   },
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "left",
+    "street": "mccarthy"
+   },
+   {
+    "direction": "right",
+    "street": "paul anka"
+   },
+   {
+    "direction": "left",
+    "street": "hunt club"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   }
+  ],
+  "status": "partial",
+  "waypoints": [
+   {
+    "node_id": 901832917,
+    "lat": 45.3536292,
+    "lon": -75.647329,
+    "pair": [
+     "hunt club",
+     "bank"
+    ],
+    "candidates": 4
+   },
+   {
+    "node_id": 901831661,
+    "lat": 45.3703787,
+    "lon": -75.6631689,
+    "pair": [
+     "bank",
+     "walkley"
+    ],
+    "candidates": 4
+   },
+   {
+    "node_id": 901870167,
+    "lat": 45.3647598,
+    "lon": -75.6773281,
+    "pair": [
+     "walkley",
+     "mccarthy"
+    ],
+    "candidates": 2
+   },
+   {
+    "node_id": 901863975,
+    "lat": 45.351836,
+    "lon": -75.6717072,
+    "pair": [
+     "mccarthy",
+     "paul anka"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901831064,
+    "lat": 45.3430862,
+    "lon": -75.6709119,
+    "pair": [
+     "paul anka",
+     "hunt club"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "hunt club"
+    ],
+    "reason": "streets exist but do not intersect"
+   },
+   {
+    "pair": [
+     "hunt club",
+     "walkley"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:ie4ngwq",
+  "centre_id": "canotek",
+  "test_class": "G",
+  "reliability": 0.5,
+  "observed_at": "2022-08-31",
+  "author_hash": "a_245d98478890",
+  "turns": [
+   {
+    "direction": "straight",
+    "street": "loyola"
+   },
+   {
+    "direction": "left",
+    "street": "ogilvie"
+   },
+   {
+    "direction": "left",
+    "street": "montreal road"
+   },
+   {
+    "direction": "right",
+    "street": "eastvale"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "loyola",
+     "ogilvie"
+    ],
+    "reason": "streets exist but do not intersect"
+   },
+   {
+    "pair": [
+     "ogilvie",
+     "montreal road"
+    ],
+    "reason": "unknown street: montreal road"
+   },
+   {
+    "pair": [
+     "montreal road",
+     "eastvale"
+    ],
+    "reason": "unknown street: montreal road"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:nad8vq4",
+  "centre_id": "walkley",
+  "test_class": "G",
+  "reliability": 0.5,
+  "observed_at": "2025-08-30",
+  "author_hash": "a_b331863d1df7",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "left",
+    "street": "airport parkway"
+   },
+   {
+    "direction": "left",
+    "street": "uplands"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "airport parkway"
+    ],
+    "reason": "streets exist but do not intersect"
+   },
+   {
+    "pair": [
+     "airport parkway",
+     "uplands"
+    ],
+    "reason": "streets exist but do not intersect"
+   },
+   {
+    "pair": [
+     "uplands",
+     "walkley"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:t4mq10",
+  "centre_id": "walkley",
+  "test_class": "G",
+  "reliability": 0.35,
+  "observed_at": "2021-08-31",
+  "author_hash": "a_d35effb78501",
+  "turns": [
+   {
+    "direction": "right",
+    "street": "now hit"
+   },
+   {
+    "direction": "right",
+    "street": "drive"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "now hit",
+     "drive"
+    ],
+    "reason": "unknown street: now hit"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:ivttzi8",
+  "centre_id": "walkley",
+  "test_class": "G",
+  "reliability": 0.35,
+  "observed_at": "2022-08-31",
+  "author_hash": "a_31a35df90d7f",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "straight",
+    "street": "airport parkway"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "airport parkway"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:1m3gkxn",
+  "centre_id": "walkley",
+  "test_class": "G",
+  "reliability": 0.5,
+  "observed_at": "2025-08-30",
+  "author_hash": "a_de7cff8d212e",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "enter"
+   },
+   {
+    "direction": "right",
+    "street": "uplands"
+   },
+   {
+    "direction": "right",
+    "street": "cahill"
+   },
+   {
+    "direction": "right",
+    "street": "mccarthy"
+   },
+   {
+    "direction": "left",
+    "street": "hunt club"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   }
+  ],
+  "status": "partial",
+  "waypoints": [
+   {
+    "node_id": 901850474,
+    "lat": 45.3461262,
+    "lon": -75.6668532,
+    "pair": [
+     "uplands",
+     "cahill"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901838651,
+    "lat": 45.350509,
+    "lon": -75.6644406,
+    "pair": [
+     "cahill",
+     "mccarthy"
+    ],
+    "candidates": 1
+   },
+   {
+    "node_id": 901844517,
+    "lat": 45.3475726,
+    "lon": -75.6615337,
+    "pair": [
+     "mccarthy",
+     "hunt club"
+    ],
+    "candidates": 2
+   }
+  ],
+  "misses": [
+   {
+    "pair": [
+     "enter",
+     "uplands"
+    ],
+    "reason": "unknown street: enter"
+   },
+   {
+    "pair": [
+     "hunt club",
+     "walkley"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:n99cee7",
+  "centre_id": "walkley",
+  "test_class": "G",
+  "reliability": 0.35,
+  "observed_at": "2025-08-30",
+  "author_hash": "a_de7cff8d212e",
+  "turns": [
+   {
+    "direction": "right",
+    "street": "airport parkway"
+   },
+   {
+    "direction": "left",
+    "street": "make"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "airport parkway",
+     "make"
+    ],
+    "reason": "unknown street: make"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:ipeedb6",
+  "centre_id": "walkley",
+  "test_class": "ambiguous",
+  "reliability": 0.5,
+  "observed_at": "2022-08-31",
+  "author_hash": "a_8b94f3e9a793",
+  "turns": [
+   {
+    "direction": "left",
+    "street": "walkley"
+   },
+   {
+    "direction": "straight",
+    "street": "walkley"
+   },
+   {
+    "direction": "left",
+    "street": "airport parkway"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "walkley",
+     "airport parkway"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ },
+ {
+  "source_id": "reddit:199ab25",
+  "centre_id": "walkley",
+  "test_class": "ambiguous",
+  "reliability": 0.35,
+  "observed_at": "2023-08-31",
+  "author_hash": "a_d8d61f368590",
+  "turns": [
+   {
+    "direction": "straight",
+    "street": "airport parkway"
+   },
+   {
+    "direction": "right",
+    "street": "walkley"
+   }
+  ],
+  "status": "failed",
+  "waypoints": [],
+  "misses": [
+   {
+    "pair": [
+     "airport parkway",
+     "walkley"
+    ],
+    "reason": "streets exist but do not intersect"
+   }
+  ]
+ }
+]
