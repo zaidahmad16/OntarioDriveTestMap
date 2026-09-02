@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
 """
-build_intersection_index.py — turn an OSM extract into an offline
-intersection lookup and street gazetteer.
+build_intersection_index.py — offline intersection lookup and gazetteer.
 
-Replaces geocoding entirely. An intersection is a node shared by two or
-more named drivable ways, which is a fact in the extract rather than
-something a geocoder has to be persuaded to infer.
+DESTINATION: geometry/build_intersection_index.py
 
-Solves four problems with one artifact:
-  1. Intersection lookup: "cedarwood" + "walkley" -> coordinate, or a
-     definite "these streets do not meet", which is a trace validation
-     signal rather than a geocoding failure
-  2. Gazetteer: every street name in the region, so extraction stops
-     missing streets it was never told about
-  3. Node-to-way mapping: OSRM annotates routes with node IDs, not way
-     IDs, so this is what makes the way-ID representation possible
-  4. Offline and unrated: no public service in the hot path
+An intersection is a node shared by two or more named drivable ways.
+That is a fact in the extract rather than something a geocoder has to be
+persuaded to infer.
+
+RAMPS. Grade-separated roads do not share a node with the roads they
+connect to — they connect through link ways, which OSM tags
+motorway_link / trunk_link / primary_link and usually leaves unnamed.
+The original named-ways-only rule therefore made every ramp connection
+invisible: Airport Parkway had two junctions in the whole Ottawa
+extract, and six independent traces describing "airport parkway ×
+walkley" were dropped as impossible.
+
+So unnamed link ways are now followed. Chains of links are grouped into
+connected components, and every named street touching any node of a
+component is treated as connected to every other. These junctions are
+recorded with kind='ramp' so downstream can tell a genuine intersection
+from a ramp connection — they are not the same manoeuvre.
+
+Usage:
+    pip install osmium
+    python3 build_intersection_index.py ottawa.osm.pbf --db ../data/osm.db
+    python3 build_intersection_index.py --db ../data/osm.db \\
+        --lookup "airport parkway" "walkley"
+    python3 build_intersection_index.py --db ../data/osm.db \\
+        --streets "walkley,cedarwood,baycrest,walkley"
 """
 
 import argparse
@@ -25,14 +38,17 @@ import sqlite3
 import sys
 from collections import defaultdict
 
-# Drivable highway types. Footways and cycleways would create junctions
-# a car cannot use, which would then look like valid route options.
 DRIVABLE = {
     "motorway", "motorway_link", "trunk", "trunk_link",
     "primary", "primary_link", "secondary", "secondary_link",
     "tertiary", "tertiary_link", "unclassified", "residential",
     "living_street", "service", "road",
 }
+
+# Unnamed ways of these types are ramps and slip roads. They carry the
+# connection between two named roads that never share a node.
+LINK = {"motorway_link", "trunk_link", "primary_link", "secondary_link",
+        "tertiary_link", "road"}
 
 SUFFIXES = {
     "road", "rd", "street", "st", "avenue", "ave", "drive", "dr",
@@ -43,34 +59,22 @@ SUFFIXES = {
 }
 
 
-def normalise(name):
-    """'Cedarwood Drive' -> 'cedarwood'.
-
-    Reddit and transcripts give bare names. The extract gives full ones.
-    Normalising both to a base form is what lets them meet.
-    """
-    s = re.sub(r"[^\w\s]", " ", (name or "").lower())
-    words = [w for w in s.split() if w]
-    while words and words[-1] in SUFFIXES:
-        words.pop()
-    return " ".join(words) if words else (name or "").lower().strip()
-
-
 def full_form(name):
-    """Normalised but with the suffix intact.
-
-    Stripping is right for 'Bank Street' -> 'bank', which is how people
-    write it, and wrong for 'Airport Parkway' -> 'airport', where the
-    suffix is part of the name everyone uses. Rather than guessing which
-    streets are special, index both forms and match on either.
-    """
     s = re.sub(r"[^\w\s]", " ", (name or "").lower())
     return " ".join(s.split())
 
 
-def variants(name):
-    """Both forms of a query string, deduped."""
-    return list({normalise(name), full_form(name)} - {""})
+def normalise(name):
+    """'Cedarwood Drive' -> 'cedarwood'.
+
+    Both forms are indexed, so a street whose suffix is part of its real
+    name — Airport Parkway — is still findable under the full form even
+    though the stripped form collides with something else.
+    """
+    words = full_form(name).split()
+    while words and words[-1] in SUFFIXES:
+        words.pop()
+    return " ".join(words) if words else full_form(name)
 
 
 SCHEMA = """
@@ -81,19 +85,6 @@ CREATE TABLE IF NOT EXISTS streets (
     way_id     INTEGER NOT NULL,
     highway    TEXT
 );
-CREATE TABLE IF NOT EXISTS junctions (
-    node_id    INTEGER PRIMARY KEY,
-    lat        REAL NOT NULL,
-    lon        REAL NOT NULL,
-    n_streets  INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS junction_streets (
-    node_id    INTEGER NOT NULL,
-    name       TEXT NOT NULL,
-    base       TEXT NOT NULL,
-    full       TEXT NOT NULL,
-    way_id     INTEGER NOT NULL
-);
 CREATE TABLE IF NOT EXISTS centres (
     centre_id  TEXT PRIMARY KEY,
     name       TEXT,
@@ -102,6 +93,20 @@ CREATE TABLE IF NOT EXISTS centres (
     lon        REAL NOT NULL,
     osm_way_id INTEGER
 );
+CREATE TABLE IF NOT EXISTS junctions (
+    node_id    INTEGER PRIMARY KEY,
+    lat        REAL NOT NULL,
+    lon        REAL NOT NULL,
+    n_streets  INTEGER NOT NULL,
+    kind       TEXT DEFAULT 'node'
+);
+CREATE TABLE IF NOT EXISTS junction_streets (
+    node_id    INTEGER NOT NULL,
+    name       TEXT NOT NULL,
+    base       TEXT NOT NULL,
+    full       TEXT NOT NULL,
+    way_id     INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS ix_js_base ON junction_streets(base);
 CREATE INDEX IF NOT EXISTS ix_js_full ON junction_streets(full);
 CREATE INDEX IF NOT EXISTS ix_js_node ON junction_streets(node_id);
@@ -109,7 +114,7 @@ CREATE INDEX IF NOT EXISTS ix_streets_base ON streets(base);
 """
 
 
-def build(pbf_path, db_path, keep_service=True):
+def build(pbf_path, db_path, keep_service=True, ramps=True):
     try:
         import osmium
     except ImportError:
@@ -120,13 +125,15 @@ def build(pbf_path, db_path, keep_service=True):
     if not keep_service:
         drivable.discard("service")
 
-    node_streets = defaultdict(set)
+    node_streets = defaultdict(set)     # node -> {(name, way_id)}
     way_rows = []
+    link_ways = []                      # unnamed links: [(way_id, [nodes])]
 
     class WayPass(osmium.SimpleHandler):
         def __init__(self):
             super().__init__()
             self.n = 0
+            self.links = 0
 
         def way(self, w):
             hw = w.tags.get("highway")
@@ -134,6 +141,9 @@ def build(pbf_path, db_path, keep_service=True):
                 return
             name = w.tags.get("name")
             if not name:
+                if ramps and hw in LINK:
+                    link_ways.append((w.id, [nd.ref for nd in w.nodes]))
+                    self.links += 1
                 return
             self.n += 1
             way_rows.append((name, normalise(name), full_form(name),
@@ -145,22 +155,9 @@ def build(pbf_path, db_path, keep_service=True):
     wp = WayPass()
     wp.apply_file(pbf_path)
     print(f"  named drivable ways: {wp.n:,}")
+    print(f"  unnamed link ways:   {wp.links:,}")
     print(f"  nodes touched:       {len(node_streets):,}")
 
-    # A junction is a node where two or more DISTINCT street names meet.
-    # Comparing names not way IDs, since one street is usually split
-    # across many ways and every split point would otherwise look like
-    # an intersection.
-    junction_ids = {
-        nid for nid, pairs in node_streets.items()
-        if len({name for name, _ in pairs}) >= 2
-    }
-    print(f"  junction nodes:      {len(junction_ids):,}")
-
-    # Test centres. Every route in the corpus starts and ends at one, so
-    # the centre is the single location guaranteed to appear in every
-    # trace — and the only one not resolvable as a street junction.
-    # amenity=driver_testing is the OSM tag for these.
     centres = []
 
     class CentrePass(osmium.SimpleHandler):
@@ -189,21 +186,66 @@ def build(pbf_path, db_path, keep_service=True):
     CentrePass().apply_file(pbf_path, locations=True)
     print(f"  found:               {len(centres)}")
 
+    # A junction is a node where two or more DISTINCT street names meet.
+    # Comparing names not way ids, since one street is split across many
+    # ways and every split point would otherwise look like an intersection.
+    junction_ids = {
+        nid for nid, pairs in node_streets.items()
+        if len({name for name, _ in pairs}) >= 2
+    }
+    print(f"  node junctions:      {len(junction_ids):,}")
+
+    # ── ramp connections ────────────────────────────────────────────
+    # Chain the unnamed links into connected components, then read off
+    # which named streets each component touches. Two streets joined by
+    # a chain of ramps are connected, even though no node is shared.
+    ramp_pairs = []        # (repr_node, {(name, way_id)})
+    if ramps and link_ways:
+        parent = {}
+
+        def find(x):
+            while parent.get(x, x) != x:
+                parent[x] = parent.get(parent[x], parent[x])
+                x = parent[x]
+            return x
+
+        def union(a, b):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+
+        for wid, nodes in link_ways:
+            for n in nodes:
+                parent.setdefault(n, n)
+            for a, b in zip(nodes, nodes[1:]):
+                union(a, b)
+
+        comp = defaultdict(list)
+        for n in parent:
+            comp[find(n)].append(n)
+
+        for root, nodes in comp.items():
+            touching = set()
+            for n in nodes:
+                touching |= node_streets.get(n, set())
+            if len({nm for nm, _ in touching}) >= 2:
+                # anchor on a node that a named street actually touches,
+                # so the coordinate lands on real road rather than mid-ramp
+                anchor = next((n for n in nodes if n in node_streets), nodes[0])
+                ramp_pairs.append((anchor, touching))
+        print(f"  ramp connections:    {len(ramp_pairs):,}")
+
     coords = {}
+    want = junction_ids | {a for a, _ in ramp_pairs}
 
     class NodePass(osmium.SimpleHandler):
         def node(self, n):
-            if n.id in junction_ids and n.location.valid():
+            if n.id in want and n.location.valid():
                 coords[n.id] = (n.location.lat, n.location.lon)
 
     print("pass 2: reading node coordinates")
     NodePass().apply_file(pbf_path)
     print(f"  located:             {len(coords):,}")
-
-    missing = len(junction_ids) - len(coords)
-    if missing:
-        print(f"  ! {missing:,} junctions had no coordinate "
-              f"(nodes outside the extract boundary)")
 
     if os.path.exists(db_path):
         os.remove(db_path)
@@ -220,49 +262,55 @@ def build(pbf_path, db_path, keep_service=True):
             continue
         lat, lon = coords[nid]
         pairs = node_streets[nid]
-        jrows.append((nid, lat, lon, len({n for n, _ in pairs})))
+        jrows.append((nid, lat, lon, len({n for n, _ in pairs}), "node"))
         for name, wid in pairs:
-            jsrows.append((nid, name, normalise(name),
-                           full_form(name), wid))
+            jsrows.append((nid, name, normalise(name), full_form(name), wid))
+
+    seen = {r[0] for r in jrows}
+    for anchor, touching in ramp_pairs:
+        if anchor not in coords or anchor in seen:
+            continue
+        lat, lon = coords[anchor]
+        seen.add(anchor)
+        jrows.append((anchor, lat, lon, len({n for n, _ in touching}), "ramp"))
+        for name, wid in touching:
+            jsrows.append((anchor, name, normalise(name), full_form(name), wid))
 
     con.executemany(
-        "INSERT INTO junctions (node_id, lat, lon, n_streets) VALUES (?,?,?,?)",
-        jrows)
+        "INSERT OR REPLACE INTO junctions "
+        "(node_id, lat, lon, n_streets, kind) VALUES (?,?,?,?,?)", jrows)
     con.executemany(
         "INSERT INTO junction_streets (node_id, name, base, full, way_id) "
         "VALUES (?,?,?,?,?)", jsrows)
-    con.commit()
-
     if centres:
         con.executemany(
             "INSERT OR REPLACE INTO centres "
             "(centre_id, name, addr, lat, lon, osm_way_id) VALUES (?,?,?,?,?,?)",
             centres)
-        con.commit()
+    con.commit()
 
     n_streets = con.execute(
         "SELECT COUNT(DISTINCT base) FROM streets").fetchone()[0]
+    n_ramp = con.execute(
+        "SELECT COUNT(*) FROM junctions WHERE kind='ramp'").fetchone()[0]
     print(f"\nwrote {db_path}")
     print(f"  distinct street names: {n_streets:,}")
-    print(f"  junctions:             {len(jrows):,}")
+    print(f"  junctions:             {len(jrows):,}  ({n_ramp:,} via ramps)")
     con.close()
     return 0
 
 
-def lookup(db_path, a, b):
-    """Find junctions where streets a and b meet.
+def variants(name):
+    return list({normalise(name), full_form(name)} - {""})
 
-    Matches a query against either the stripped base or the full form,
-    so 'bank' finds Bank Street and 'airport parkway' finds Airport
-    Parkway. Parameterised throughout; placeholders are generated from
-    the variant count, never from the values.
-    """
+
+def lookup(db_path, a, b):
     va, vb = variants(a), variants(b)
     pa = ",".join("?" * len(va))
     pb = ",".join("?" * len(vb))
     con = sqlite3.connect(db_path)
     rows = con.execute(f"""
-        SELECT j.node_id, j.lat, j.lon,
+        SELECT j.node_id, j.lat, j.lon, j.kind,
                GROUP_CONCAT(DISTINCT js.name)
         FROM junctions j
         JOIN junction_streets js ON js.node_id = j.node_id
@@ -277,17 +325,16 @@ def lookup(db_path, a, b):
 
 
 def suggest(db_path, name, limit=6):
-    """Nearest known street names, for when a lookup misses."""
     con = sqlite3.connect(db_path)
-    base = normalise(name)
+    b = normalise(name)
     rows = con.execute(
         "SELECT DISTINCT base FROM streets WHERE base LIKE ? LIMIT ?",
-        (f"%{base}%", limit)).fetchall()
+        (f"%{b}%", limit)).fetchall()
     if not rows:
         import difflib
         allb = [r[0] for r in con.execute(
             "SELECT DISTINCT base FROM streets").fetchall()]
-        rows = [(m,) for m in difflib.get_close_matches(base, allb,
+        rows = [(m,) for m in difflib.get_close_matches(b, allb,
                                                         n=limit, cutoff=0.7)]
     con.close()
     return [r[0] for r in rows]
@@ -295,22 +342,23 @@ def suggest(db_path, name, limit=6):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("pbf", nargs="?", help="path to .osm.pbf extract")
-    ap.add_argument("--db", default="osm.db")
-    ap.add_argument("--no-service", action="store_true",
-                    help="exclude service roads (parking lots, driveways)")
+    ap.add_argument("pbf", nargs="?")
+    ap.add_argument("--db", default="../data/osm.db")
+    ap.add_argument("--no-service", action="store_true")
+    ap.add_argument("--no-ramps", action="store_true",
+                    help="named ways only, the old behaviour")
     ap.add_argument("--lookup", nargs=2, metavar=("A", "B"))
-    ap.add_argument("--streets", help="comma separated ordered trace")
+    ap.add_argument("--streets")
     args = ap.parse_args()
 
     if args.lookup:
         rows = lookup(args.db, *args.lookup)
         if rows:
-            for nid, lat, lon, names in rows:
-                print(f"  node {nid}  {lat:.6f}, {lon:.6f}   {names}")
+            for nid, lat, lon, kind, names in rows:
+                via = "  (via ramp)" if kind == "ramp" else ""
+                print(f"  node {nid}  {lat:.6f}, {lon:.6f}   {names}{via}")
         else:
-            print(f"  no junction of '{args.lookup[0]}' and "
-                  f"'{args.lookup[1]}'")
+            print(f"  no junction of '{args.lookup[0]}' and '{args.lookup[1]}'")
             for s in args.lookup:
                 near = suggest(args.db, s)
                 print(f"    '{s}' -> {near if near else 'not in extract'}")
@@ -323,20 +371,19 @@ def main():
             rows = lookup(args.db, a, b)
             if rows:
                 ok += 1
-                nid, lat, lon, names = rows[0]
-                extra = f"  (+{len(rows)-1} more)" if len(rows) > 1 else ""
-                print(f"  {a} x {b}: {lat:.6f}, {lon:.6f}  node {nid}{extra}")
+                nid, lat, lon, kind, names = rows[0]
+                via = " (ramp)" if kind == "ramp" else ""
+                extra = f"  +{len(rows)-1} more" if len(rows) > 1 else ""
+                print(f"  {a} x {b}: {lat:.6f}, {lon:.6f}  node {nid}{via}{extra}")
             else:
                 print(f"  {a} x {b}: NO JUNCTION")
         print(f"\n  {ok}/{len(streets)-1} consecutive pairs intersect")
-        if ok < len(streets) - 1:
-            print("  A missing pair means the trace skips a connecting "
-                  "street, or a name did not match the extract.")
         return 0
 
     if not args.pbf:
         ap.error("provide a .pbf to build, or --lookup / --streets to query")
-    return build(args.pbf, args.db, keep_service=not args.no_service)
+    return build(args.pbf, args.db, keep_service=not args.no_service,
+                 ramps=not args.no_ramps)
 
 
 if __name__ == "__main__":
