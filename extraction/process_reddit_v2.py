@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """
-process_reddit.py — turn a manually collected Reddit CSV into the project's
-intermediate form, plus the numbers needed to settle whether text sources
-carry route geometry.
+process_reddit_v2.py — turn a collected Reddit CSV into the project's
+intermediate form.
 
-Input columns expected:
-  thread_key, post_id, subreddit, record_type, title, flair, post_author,
-  post_age, post_body, num_comments, comment_id, comment_author,
-  comment_age, comment_body, edited, status, source_file
+DESTINATION: extraction/process_reddit_v2.py
 
 Outputs (into --outdir):
   reddit_records.csv        one row per post/comment, scored, no usernames
-  reddit_traces.json        intermediate-form candidates (ordered turns only)
-  reddit_failpoints.csv     fail-point mentions, for the fail_points table
+  reddit_traces.json        intermediate-form traces (ordered turns only)
+  reddit_failpoints.csv     fail-point mentions
   street_candidates.csv     street-like strings NOT in the gazetteer
   summary.txt               the metrics that go in Report Material
 
@@ -26,6 +22,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import sys
 from collections import Counter, defaultdict
 from datetime import date, timedelta
@@ -33,12 +30,11 @@ from datetime import date, timedelta
 import pandas as pd
 
 # --------------------------------------------------------------------------
-# Gazetteer. Ottawa-area streets relevant to the four launch centres.
-# Kept flat and lowercase; matching is done on a normalised body.
+# Hand-maintained list. Kept for the aliases and local misspellings that
+# the OSM extract does not know about. Validation uses GAZ below.
 # --------------------------------------------------------------------------
 
 GAZETTEER = [
-    # Walkley / Hunt Club / Alta Vista
     "walkley", "albion", "conroy", "heron", "bank", "riverside", "hunt club",
     "airport parkway", "alta vista", "ledbury", "herongate", "ridgemont",
     "ellwood", "urbandale", "kaladar", "sandalwood", "plesser", "clover",
@@ -46,26 +42,41 @@ GAZETTEER = [
     "smyth", "pleasant park", "kilborn", "chomley", "othello", "canterbury",
     "st laurent", "saint laurent", "coronation", "trainyards", "belfast",
     "industrial", "terminal", "sheffield", "johnston", "data centre",
-    # Canotek / east end
     "canotek", "innes", "cyrville", "ogilvie", "blair", "montreal road",
     "aviation parkway", "shefford", "bathgate", "labrie", "michael",
     "startop", "belcourt", "orleans", "jeanne d'arc", "tenth line",
-    # South / airport
     "lester road", "leitrim", "limebank", "bowesville", "uplands", "brookdale",
     "hunt club road", "mitch owens", "rideau", "prince of wales", "fisher",
     "meadowlands", "merivale", "baseline", "woodroffe", "greenbank",
-    # Highways
     "417", "416", "queensway", "highway 7", "highway 15", "highway 43",
-    # Smiths Falls / Winchester
     "beckwith", "cornelia", "lombard", "chambers", "elmsley", "abbott",
     "county road 31", "main street", "st lawrence",
-    # discovered from this Reddit corpus, absent from the YouTube gazetteer.
-    # These are the residential G2 streets, which is what text sources
-    # turned out to be good for.
     "cedarwood", "baycrest", "heatherington", "fairlea", "briar hill",
     "amberdale", "cahill", "mccarthy", "paul anka", "loyola", "eastvale",
-    "sieveright", "delta", "kaladar", "pleasant park", "erie", "clementine",
+    "sieveright", "delta", "erie", "clementine", "corley", "colliston",
 ]
+
+# Every street name in the OSM extract, loaded at run time.
+#
+# Validating against this rather than the ~90-entry hand list is what
+# stops "get", "enter", "make" and "now hit" reaching the traces. They
+# have been doing so since the first Reddit run and only dying three
+# steps later at junction validation — which meant the extractor was
+# knowingly producing garbage and relying on something downstream to
+# filter it.
+GAZ = set()
+
+
+def load_gazetteer(db):
+    """Every distinct street name in the extract, both forms."""
+    con = sqlite3.connect(db)
+    out = {r[0] for r in con.execute("SELECT DISTINCT base FROM streets")
+           if r[0]}
+    out |= {r[0] for r in con.execute("SELECT DISTINCT full FROM streets")
+            if r[0]}
+    con.close()
+    return out
+
 
 # Not streets, however the regex captures them.
 NOT_A_STREET = {
@@ -74,21 +85,20 @@ NOT_A_STREET = {
 
 # Not streets either, but they ARE locations, and every route in the
 # corpus starts and ends at one. Normalised to a single token so the
-# snapper can resolve them against the centres table rather than
-# hunting for a street junction that does not exist.
+# snapper can resolve them against the centres table.
 CENTRE_TOKENS = {
     "drivetest", "drive test", "walkley drivetest", "test centre",
     "test center", "testcentre", "the centre", "the center", "centre",
     "center", "test site", "drivetest centre", "drivetest center",
 }
 
-# Common spelling variants seen in casual writing. Applied before snapping.
 ALIASES = {
     "walkey": "walkley", "wakley": "walkley", "walkly": "walkley",
     "huntclub": "hunt club", "hunt club rd": "hunt club",
     "airport pkwy": "airport parkway", "the parkway": "airport parkway",
     "parkway": "airport parkway", "hetherington": "heatherington",
-    "loyala": "loyola", "montreal": "montreal road", "st laurent": "saint laurent",
+    "loyala": "loyola", "montreal": "montreal road",
+    "st laurent": "saint laurent",
 }
 
 STREET_SUFFIX = (
@@ -96,11 +106,9 @@ STREET_SUFFIX = (
     r"Cres|Crescent|Way|Lane|Ln|Crt|Court|Terrace|Terr|Circle|Cir|Place|Pl)"
 )
 
-# A capitalised name followed by a street suffix. Catches streets the
-# gazetteer does not know about yet, which is how the gazetteer grows.
 STREET_LIKE = re.compile(
-    r"\b([A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-]+){0,2})\s+" + STREET_SUFFIX + r"\b"
-)
+    r"\b([A-Z][A-Za-z'\-]+(?:\s+[A-Z][A-Za-z'\-]+){0,2})\s+"
+    + STREET_SUFFIX + r"\b")
 
 # --------------------------------------------------------------------------
 # Turn extraction
@@ -108,31 +116,24 @@ STREET_LIKE = re.compile(
 
 DIRECTION = r"(left|right|straight)"
 
-# "turn left onto Heron", "left on Bank St", "turned right at Walkley"
 TURN_WITH_STREET = re.compile(
-    r"\b(?:turn(?:ed|ing|s)?\s+|go\s+|head(?:ed|ing)?\s+|make\s+a\s+|took\s+a\s+)?"
-    + DIRECTION +
-    r"\s+(?:turn\s+)?(?:on|onto|at|in\s?to|into|down|to|towards?|toward)\s+(?:the\s+)?"
+    r"\b(?:turn(?:ed|ing|s)?\s+|go\s+|head(?:ed|ing)?\s+|make\s+a\s+|"
+    r"took\s+a\s+)?" + DIRECTION +
+    r"\s+(?:turn\s+)?(?:on|onto|at|in\s?to|into|down|to|towards?|toward)"
+    r"\s+(?:the\s+)?"
     r"([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,2})",
-    re.IGNORECASE,
-)
+    re.IGNORECASE)
 
-# "continue on X", "merge onto X", "stay on X" — straight-ahead movement
 STRAIGHT_WITH_STREET = re.compile(
     r"\b(?:continue|merge|stay|proceed|drive|get)\s+(?:straight\s+)?"
     r"(?:on|onto|along)\s+(?:the\s+)?"
     r"([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,2})",
-    re.IGNORECASE,
-)
+    re.IGNORECASE)
 
-# Bare turn language with no street attached. Counted separately, because
-# this is the manoeuvre-advice signal, not the route-geometry signal.
 BARE_TURN = re.compile(
     r"\b(?:turn(?:ed|ing|s)?|merge[sd]?|lane\s+change)\s+" + DIRECTION + r"\b",
-    re.IGNORECASE,
-)
+    re.IGNORECASE)
 
-# Words that look like a street in the regex but are not one.
 STOPWORDS = {
     "the", "a", "an", "it", "me", "my", "you", "your", "him", "her", "them",
     "this", "that", "there", "here", "then", "when", "where", "which", "who",
@@ -151,27 +152,17 @@ STOPWORDS = {
     "medium", "farthest", "screwed", "pass", "check", "don't", "dont",
 }
 
-# --------------------------------------------------------------------------
-# Fail points
-# --------------------------------------------------------------------------
-
 FAIL_PHRASE = re.compile(
-    r"\b(?:auto(?:matic)?\s+fail|failed?\s+(?:for|on|because|due\s+to|at|from)|"
-    r"instant\s+fail|critical\s+error|major\s+(?:error|mistake)|"
+    r"\b(?:auto(?:matic)?\s+fail|failed?\s+(?:for|on|because|due\s+to|at|"
+    r"from)|instant\s+fail|critical\s+error|major\s+(?:error|mistake)|"
     r"docked|deduct(?:ed|ion)|lost\s+(?:marks|points))\b",
-    re.IGNORECASE,
-)
-
-# --------------------------------------------------------------------------
-# Centres
-# --------------------------------------------------------------------------
+    re.IGNORECASE)
 
 CENTRES = {
     "walkley": ["walkley"],
     "canotek": ["canotek"],
     "smithsfalls": ["smiths falls", "smith falls", "smithsfalls"],
     "winchester": ["winchester"],
-    # tracked but not launch centres, so volume elsewhere is visible
     "other_ottawa": ["ottawa"],
     "toronto_area": ["etobicoke", "downsview", "port union", "metro east",
                      "oshawa", "brampton", "mississauga", "newmarket",
@@ -183,6 +174,12 @@ TEST_CLASS_G = re.compile(r"\bg\b(?!\s*[12])|full\s+g\b", re.IGNORECASE)
 
 AGE = re.compile(r"^\s*(\d+)\s*(d|w|mo|y|h|m)\b", re.IGNORECASE)
 AGE_DAYS = {"h": 0, "m": 0, "d": 1, "w": 7, "mo": 30, "y": 365}
+
+SUFFIX_WORDS = {
+    "rd", "road", "st", "street", "ave", "avenue", "dr", "drive", "blvd",
+    "boulevard", "pkwy", "parkway", "cres", "crescent", "way", "lane", "ln",
+    "crt", "court", "terrace", "terr", "circle", "cir", "place", "pl",
+}
 
 
 # --------------------------------------------------------------------------
@@ -207,20 +204,13 @@ def age_to_date(age_str, scraped_on):
     return scraped_on - timedelta(days=n * AGE_DAYS.get(unit, 1))
 
 
-SUFFIX_WORDS = {
-    "rd", "road", "st", "street", "ave", "avenue", "dr", "drive", "blvd",
-    "boulevard", "pkwy", "parkway", "cres", "crescent", "way", "lane", "ln",
-    "crt", "court", "terrace", "terr", "circle", "cir", "place", "pl",
-}
-
-
 def clean_street(raw):
     """Normalise a captured street candidate, or return None if it is junk.
 
     The regex over-captures, because casual writing runs straight from the
     street name into the rest of the sentence ("right on Walkley you pass
-    the..."). So truncate at the first token that cannot be part of a street
-    name, then alias and snap.
+    the..."). So truncate at the first token that cannot be part of a
+    street name, then alias, then validate.
     """
     if not raw:
         return None
@@ -230,18 +220,14 @@ def clean_street(raw):
 
     # Centre phrases are checked BEFORE any street cleaning. "test centre"
     # would otherwise truncate to nothing, since "test" is a stopword, and
-    # the route would lose its final waypoint. A centre is a location, not
-    # a street, so street-name rules should not apply to it.
+    # the route would lose its final waypoint.
     low = s.lower().strip()
     if low in CENTRE_TOKENS or any(
             low == f"{a} {b}" for a in ("the", "a") for b in CENTRE_TOKENS):
         return "@centre"
 
-    words = s.lower().split()
-
-    # Truncate at the first token that cannot belong to a street name.
     kept = []
-    for w in words:
+    for w in low.split():
         w = w.strip(".,;:!?'\"")
         if not w:
             break
@@ -257,30 +243,38 @@ def clean_street(raw):
     if not kept:
         return None
 
-    # Drop a trailing suffix word so "baycrest dr" and "baycrest" unify —
-    # unless the suffix is part of the real name ("airport parkway").
+    # Drop a trailing suffix so "baycrest dr" and "baycrest" unify — unless
+    # the suffix is part of the real name ("airport parkway").
     if len(kept) > 1 and kept[-1] in SUFFIX_WORDS:
         if " ".join(kept) not in GAZETTEER:
             kept = kept[:-1]
 
-    name = " ".join(kept)
-    name = ALIASES.get(name, name)
+    name = ALIASES.get(" ".join(kept), " ".join(kept))
 
     if name in CENTRE_TOKENS:
-        return "@centre"          # resolved later against the centres table
+        return "@centre"
     if name in NOT_A_STREET or name in STOPWORDS:
         return None
-    if len(name) < 3 or name.isdigit() and len(name) < 3:
+    if len(name) < 3 or (name.isdigit() and len(name) < 3):
         return None
 
-    # Fuzzy-snap to the gazetteer. Catches misspellings the alias list
-    # does not enumerate. Conservative cutoff; a miss is better than a
-    # wrong street, since a wrong street looks like consensus later.
-    if name not in GAZETTEER:
-        import difflib
-        near = difflib.get_close_matches(name, GAZETTEER, n=1, cutoff=0.86)
-        if near:
-            name = near[0]
+    # Hand list first: it carries local aliases and misspellings the
+    # extract does not know about.
+    if name in GAZETTEER:
+        return name
+    import difflib
+    near = difflib.get_close_matches(name, GAZETTEER, n=1, cutoff=0.86)
+    if near:
+        return near[0]
+
+    # Then the real gazetteer. A name matching no street in the extract is
+    # not a street. Cutoff 0.88 rather than 0.86 because 10,134 names will
+    # find a plausible-looking match for almost any word.
+    if GAZ:
+        if name in GAZ:
+            return name
+        near = difflib.get_close_matches(name, GAZ, n=1, cutoff=0.88)
+        return near[0] if near else None
 
     return name
 
@@ -288,12 +282,13 @@ def clean_street(raw):
 def in_gazetteer(street):
     if not street:
         return False
+    if GAZ and street in GAZ:
+        return True
     return any(g == street or g in street or street in g for g in GAZETTEER)
 
 
-# A single comment can hold several labelled routes. "Route 1:", "Route 2:",
-# sometimes bolded. Treating them as one trace produces an impossible path
-# that doubles back on itself, so split before extracting turns.
+# A single comment can hold several labelled routes. Treating them as one
+# trace produces an impossible path that doubles back on itself.
 ROUTE_MARKER = re.compile(
     r"(?:^|\s)\**\s*(?:route|rt\.?)\s*#?\s*(\d+)\s*\**\s*:?",
     re.IGNORECASE | re.MULTILINE)
@@ -315,19 +310,9 @@ def split_routes(text):
     return out or [("", text)]
 
 
-# Routes end at the centre, and often say so without a direction:
-# "Back to test centre", "return to the DriveTest". No direction word, so
-# the turn regex cannot see it, and the route stops one junction early.
-RETURN_TO_CENTRE = re.compile(
-    r"\b(?:back|return(?:ed|ing)?|head(?:ed|ing)?\s+back|finish(?:ed)?)\s+"
-    r"(?:to|at|into|in\s?to)\s+(?:the\s+)?"
-    r"(drive\s?test|test\s+cent(?:re|er)|cent(?:re|er)|test\s+site)",
-    re.IGNORECASE)
-
-
-# Routes end at the centre, and often say so without a direction:
-# "Back to test centre", "return to the DriveTest". No direction word, so
-# the turn regex cannot see it, and the route stops one junction early.
+# Routes end at the centre, often with no direction word: "Back to test
+# centre", "return to the DriveTest". The turn regex cannot see those, so
+# the route would stop one junction early.
 RETURN_TO_CENTRE = re.compile(
     r"\b(?:back|return(?:ed|ing)?|head(?:ed|ing)?\s+back|finish(?:ed)?)\s+"
     r"(?:to|at|into|in\s?to)\s+(?:the\s+)?"
@@ -339,7 +324,7 @@ def extract_turns(text):
     """Ordered list of {direction, street}, in the order they appear.
 
     Only turns with a street attached count. A bare 'turn left' constrains
-    no geometry and is deliberately excluded from the sequence.
+    no geometry and is deliberately excluded.
     """
     if not text:
         return []
@@ -354,17 +339,13 @@ def extract_turns(text):
             hits.append((m.start(), "straight", st))
     for m in RETURN_TO_CENTRE.finditer(text):
         hits.append((m.start(), "straight", "@centre"))
-
-    for m in RETURN_TO_CENTRE.finditer(text):
-        hits.append((m.start(), "straight", "@centre"))
-
     hits.sort(key=lambda x: x[0])
 
     turns = []
     for _, direction, street in hits:
-        # Collapse only IMMEDIATE repetition (the same phrase matched twice).
-        # A route legitimately returns to the same street several times, so
-        # global dedup would flatten a loop into a line.
+        # Collapse only IMMEDIATE repetition. A route legitimately returns
+        # to the same street several times, so global dedup would flatten
+        # a loop into a line.
         if turns and turns[-1] == {"direction": direction, "street": street}:
             continue
         turns.append({"direction": direction, "street": street})
@@ -376,11 +357,12 @@ def find_streets(text):
     if not text:
         return set(), set()
     low = text.lower()
-    known = {g for g in GAZETTEER if re.search(r"\b" + re.escape(g) + r"\b", low)}
+    known = {g for g in GAZETTEER
+             if re.search(r"\b" + re.escape(g) + r"\b", low)}
     candidates = set()
     for m in STREET_LIKE.finditer(text):
         st = clean_street(m.group(1))
-        if st and not in_gazetteer(st):
+        if st and st != "@centre" and not in_gazetteer(st):
             candidates.add(st)
     return known, candidates
 
@@ -400,11 +382,7 @@ def guess_class(*texts):
 
 def guess_centre(*texts):
     blob = " ".join(t for t in texts if t and not pd.isna(t)).lower()
-    found = []
-    for centre, keys in CENTRES.items():
-        if any(k in blob for k in keys):
-            found.append(centre)
-    # a named launch centre wins over the generic ottawa bucket
+    found = [c for c, keys in CENTRES.items() if any(k in blob for k in keys)]
     launch = [c for c in found if c in ("walkley", "canotek",
                                         "smithsfalls", "winchester")]
     if launch:
@@ -413,12 +391,7 @@ def guess_centre(*texts):
 
 
 def reliability(n_turns, n_streets, record_type):
-    """Design-doc weights, applied to what the text actually contains.
-
-    0.5  detailed post with an ordered turn sequence
-    0.2  passing mention naming a couple of streets
-    0.0  no route geometry — kept for fail points only
-    """
+    """Weights applied to what the text actually contains."""
     if n_turns >= 3:
         return 0.5
     if n_turns >= 2:
@@ -436,7 +409,20 @@ def main():
     ap.add_argument("--outdir", default="out")
     ap.add_argument("--scraped-on", default="2026-08-30")
     ap.add_argument("--salt", default="ontarioroadtestmap")
+    ap.add_argument("--db", default="../data/osm.db",
+                    help="osm.db, for validating streets against the real "
+                         "gazetteer rather than the built-in list")
+    ap.add_argument("--no-gazetteer", action="store_true",
+                    help="skip gazetteer validation (old behaviour)")
     args = ap.parse_args()
+
+    if not args.no_gazetteer:
+        if os.path.exists(args.db):
+            GAZ.update(load_gazetteer(args.db))
+            print(f"gazetteer: {len(GAZ):,} street names from {args.db}")
+        else:
+            print(f"  ! {args.db} not found — street validation disabled, "
+                  f"falling back to the {len(GAZETTEER)}-entry built-in list")
 
     os.makedirs(args.outdir, exist_ok=True)
     scraped_on = date.fromisoformat(args.scraped_on)
@@ -444,20 +430,18 @@ def main():
     df = pd.read_csv(args.csv)
     df = df.where(pd.notna(df), None)
 
-    # Thread context. A comment saying "I turned left on Baycrest" carries no
-    # centre name; the centre is stated in the post it replies to. Build a
-    # per-thread blob once and let comments inherit from it.
+    # Thread context. A comment saying "I turned left on Baycrest" carries
+    # no centre name; the centre is stated in the post it replies to.
     thread_ctx = {}
     for _, r in df.iterrows():
-        key = r["thread_key"]
+        k = r["thread_key"]
         blob = " ".join(str(x) for x in
                         (r["title"], r["flair"], r["post_body"]) if x)
-        if blob and (key not in thread_ctx or len(blob) > len(thread_ctx[key])):
-            thread_ctx[key] = blob
+        if blob and (k not in thread_ctx or len(blob) > len(thread_ctx[k])):
+            thread_ctx[k] = blob
 
-    records = []
+    records, failpoints = [], []
     street_candidates = Counter()
-    failpoints = []
 
     for _, r in df.iterrows():
         is_comment = r["record_type"] == "comment"
@@ -467,14 +451,13 @@ def main():
         author = r["comment_author"] if is_comment else r["post_author"]
         age = r["comment_age"] if is_comment else r["post_age"]
 
-        # A comment row repeats the parent post body in post_body. Only the
-        # comment's own text is that comment's evidence.
         turns = extract_turns(body)
         known, cand = find_streets(body)
         street_candidates.update(cand)
 
         n_bare = len(BARE_TURN.findall(body))
         has_fail = bool(FAIL_PHRASE.search(body))
+        d = age_to_date(age, scraped_on)
 
         rec = {
             "record_id": (r["comment_id"] if is_comment else r["post_id"]),
@@ -482,8 +465,7 @@ def main():
             "subreddit": r["subreddit"],
             "record_type": r["record_type"],
             "author_hash": anon(author, args.salt),
-            "observed_at": (age_to_date(age, scraped_on).isoformat()
-                            if age_to_date(age, scraped_on) else ""),
+            "observed_at": d.isoformat() if d else "",
             "centre": guess_centre(title, body, r["flair"],
                                    thread_ctx.get(r["thread_key"], "")),
             "test_class": guess_class(title, r["flair"], body,
@@ -497,8 +479,8 @@ def main():
             "has_fail_language": has_fail,
             "body_chars": len(body),
             "status": r["status"] or "",
+            "_body": body,
         }
-        rec["_body"] = body
         rec["reliability"] = reliability(len(turns), len(known),
                                          r["record_type"])
         rec["traceable"] = "yes" if len(turns) >= 2 else (
@@ -507,21 +489,18 @@ def main():
 
         if has_fail:
             failpoints.append({
-                "record_id": rec["record_id"],
-                "centre": rec["centre"],
+                "record_id": rec["record_id"], "centre": rec["centre"],
                 "test_class": rec["test_class"],
                 "observed_at": rec["observed_at"],
-                "streets": rec["streets"],
-                "excerpt_chars": len(body),
+                "streets": rec["streets"], "excerpt_chars": len(body),
             })
 
     out = pd.DataFrame(records).drop(columns=["_body"])
     out.to_csv(os.path.join(args.outdir, "reddit_records.csv"), index=False)
 
-    # ---- intermediate form -------------------------------------------------
+    # ---- intermediate form ------------------------------------------------
     traces = []
     for rec in records:
-        # split first: one record can hold several labelled routes
         segs = split_routes(rec.get("_body", ""))
         if len(segs) > 1:
             for label, seg in segs:
@@ -562,10 +541,12 @@ def main():
         for s, n in street_candidates.most_common():
             w.writerow([s, n])
 
-    # ---- summary -----------------------------------------------------------
+    # ---- summary ----------------------------------------------------------
     lines = []
     A = lines.append
     A(f"Input: {args.csv}")
+    A(f"Gazetteer: {len(GAZ):,} names"
+      if GAZ else "Gazetteer: built-in list only")
     A(f"Rows: {len(out)}  threads: {out.thread_key.nunique()}  "
       f"authors: {out[out.author_hash != ''].author_hash.nunique()}")
     A("")
@@ -616,10 +597,12 @@ def main():
     multi = out[out.author_hash != ""].author_hash.value_counts()
     A(f"  distinct authors: {len(multi)}")
     A(f"  authors with >1 record: {(multi > 1).sum()}")
-    A(f"  largest single-author share: {multi.max() if len(multi) else 0} records")
+    A(f"  largest single-author share: "
+      f"{multi.max() if len(multi) else 0} records")
     A("")
     A("-- total corroboration weight, all rows --")
-    A(f"  {out.reliability.sum():.2f}  (publish threshold is 1.5 per route)")
+    A(f"  {out.reliability.sum():.2f}  (leave-one-out puts the useful "
+      f"threshold at 0.5 per segment, not the design doc's 1.5)")
 
     text = "\n".join(lines)
     with open(os.path.join(args.outdir, "summary.txt"), "w") as f:
