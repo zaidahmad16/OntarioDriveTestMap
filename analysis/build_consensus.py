@@ -4,6 +4,10 @@ build_consensus.py — per-segment support and confidence, as GeoJSON.
 
 DESTINATION: analysis/build_consensus.py
 
+Takes every trace from every source and produces one record per road
+segment: which independent people described it, how strongly, and how
+recently. That is what the map renders.
+
 Three decisions baked in, each from something that went wrong earlier:
 
   count AUTHORS, not traces. jt7gwng contributed four traces. That is
@@ -14,82 +18,61 @@ Three decisions baked in, each from something that went wrong earlier:
   meet at a junction is not a segment — it is an extraction error.
   This kills "walkley -> get -> airport parkway" without a wordlist.
 
-  report the raw author count separately from the weighted score. A
-  confidence score is a judgement; an author count is a fact.
+  weight by source type and recency, then report the raw author count
+  separately. A confidence score is a judgement; an author count is a
+  fact. The map should be able to show the fact.
+
+Usage:
+    python3 build_consensus.py ../data/out/reddit_traces.json \\
+        ../data/out/ocr_traces.json --db ../data/osm.db \\
+        --centre walkley --out ../data/out/consensus.geojson
 """
 
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import re
 import sqlite3
 import sys
 from collections import defaultdict
 
-SUFFIXES = {"road", "rd", "street", "st", "avenue", "ave", "drive", "dr",
-            "boulevard", "blvd", "parkway", "pkwy", "crescent", "cres",
-            "court", "crt", "lane", "ln", "way", "place", "pl", "private",
-            "terrace", "circle", "trail"}
-
-KNOWN = set()
-
-
-def base(s):
-    """Strip the trailing street type, unless the full name is itself a
-    street in the extract.
-
-    "airport parkway" must not become "airport" — Airport Parkway and
-    the airport service roads are different roads kilometres apart, and
-    collapsing them merged evidence for one into the other. This is the
-    third file this bug has appeared in.
-    """
-    full = " ".join(re.sub(r"[^\w\s]", " ", (s or "").lower()).split())
-    if full in KNOWN:
-        return full
-    w = full.split()
-    while w and w[-1] in SUFFIXES:
-        w.pop()
-    return " ".join(w) if w else full
-
-
 class Graph:
     def __init__(self, db):
         self.con = sqlite3.connect(db)
         self.con.row_factory = sqlite3.Row
         self._j = {}
-        KNOWN.update(r[0] for r in
-                     self.con.execute("SELECT DISTINCT full FROM streets")
-                     if r[0])
 
     def variants(self, n):
-        b = base(n)
-        f = " ".join(re.sub(r"[^\w\s]", " ", (n or "").lower()).split())
-        return list({b, f} - {""})
+        return name_variants(n)
 
     def junction(self, a, b):
-        k = tuple(sorted((base(a), base(b))))
+        """Coordinate where two streets meet, or None."""
+        k = tuple(sorted((key(a), key(b))))
         if k in self._j:
             return self._j[k]
         va, vb = self.variants(a), self.variants(b)
         pa = ",".join("?" * len(va))
         pb = ",".join("?" * len(vb))
         r = self.con.execute(f"""
-            SELECT j.node_id, j.lat, j.lon, j.kind FROM junctions j
+            SELECT j.node_id, j.lat, j.lon FROM junctions j
             WHERE j.node_id IN (SELECT node_id FROM junction_streets
                                 WHERE base IN ({pa}) OR full IN ({pa}))
               AND j.node_id IN (SELECT node_id FROM junction_streets
                                 WHERE base IN ({pb}) OR full IN ({pb}))
-            ORDER BY CASE j.kind WHEN 'node' THEN 0 ELSE 1 END
             LIMIT 1""", (*va, *va, *vb, *vb)).fetchone()
-        out = (r["node_id"], r["lat"], r["lon"], r["kind"]) if r else None
+        out = (r["node_id"], r["lat"], r["lon"]) if r else None
         self._j[k] = out
         return out
 
 
 def age_weight(observed, half_life_years=3.0):
-    """Routes change. Decay rather than a cutoff — a cutoff throws away
-    the only evidence some segments have."""
+    """Routes change. A 2013 account is weaker evidence than a 2025 one.
+
+    Exponential decay rather than a cutoff — a cutoff throws away the
+    only evidence some segments have.
+    """
     if not observed:
         return 0.6
     try:
@@ -103,18 +86,19 @@ def age_weight(observed, half_life_years=3.0):
 def source_weight(t):
     """What a source contributes, not which platform it came from.
 
-    Video scores highest because a camera cannot skip a street the way
-    a person recalling a route can — 0 of 8 video traces failed junction
-    resolution against 11 of 20 text traces.
+    Video that names streets on signs cannot skip a street the way a
+    person recalling a route can — measured: 0 of 8 video traces failed
+    junction resolution against 11 of 20 text traces. That completeness
+    is why video scores higher, not the medium itself.
     """
     if t["source_id"].startswith("youtube"):
         return 0.9
     n = len(t.get("turns", []))
     if n >= 6:
-        return 0.6
+        return 0.6        # ordered list, most of a route
     if n >= 3:
         return 0.45
-    return 0.25
+    return 0.25           # a couple of streets in passing
 
 
 def main():
@@ -124,9 +108,11 @@ def main():
     ap.add_argument("--centre", default="walkley")
     ap.add_argument("--out", default="../data/out/consensus.geojson")
     ap.add_argument("--min-authors", type=int, default=1)
-    ap.add_argument("--report", action="store_true")
+    ap.add_argument("--report", action="store_true",
+                    help="print the table, write nothing")
     args = ap.parse_args()
 
+    load_known(args.db)
     g = Graph(args.db)
 
     traces = []
@@ -140,11 +126,14 @@ def main():
             traces.append(t)
     print(f"{len(traces)} traces\n")
 
-    seg = defaultdict(lambda: {"authors": {}, "sources": defaultdict(int),
-                               "last": "", "kind": "node"})
+    seg = defaultdict(lambda: {"authors": {}, "weight": 0.0,
+                               "sources": defaultdict(int), "last": ""})
     dropped = defaultdict(int)
 
     for t in traces:
+        # An author with no hash is treated as its own source rather than
+        # pooled with every other anonymous one, which would understate
+        # independence. Falls back to the source id.
         who = t.get("author_hash") or t["source_id"]
         kind = "video" if t["source_id"].startswith("youtube") else "text"
         sw = source_weight(t)
@@ -156,13 +145,16 @@ def main():
                 continue
             j = g.junction(a, b)
             if not j:
-                dropped[tuple(sorted((base(a), base(b))))] += 1
+                # not a junction on the graph, so not a segment. This is
+                # where "get", "enter", "make" and shopfront misreads die.
+                dropped[tuple(sorted((key(a), key(b))))] += 1
                 continue
-            k = tuple(sorted((base(a), base(b))))
+            k = tuple(sorted((key(a), key(b))))
             s = seg[k]
+            # an author counts once per segment however many traces they
+            # contributed, but keeps their strongest weight
             s["authors"][who] = max(s["authors"].get(who, 0), sw * aw)
             s["sources"][kind] += 1
-            s["kind"] = j[3]
             obs = (t.get("observed_at") or "")[:10]
             if obs > s["last"]:
                 s["last"] = obs
@@ -180,28 +172,30 @@ def main():
             "video": s["sources"]["video"],
             "text": s["sources"]["text"],
             "last_seen": s["last"],
-            "junction": s["kind"],
             "node": j[0] if j else None,
             "lat": j[1] if j else None,
             "lon": j[2] if j else None,
         })
     rows.sort(key=lambda r: (-r["authors"], -r["weight"]))
 
-    print(f"{'segment':40s} {'auth':>4s} {'wt':>6s} {'vid':>4s} {'txt':>4s}  last")
+    print(f"{'segment':38s} {'auth':>4s} {'wt':>6s} {'vid':>4s} {'txt':>4s}  last")
     for r in rows:
-        nm = f"{r['streets'][0]} x {r['streets'][1]}"
-        via = " (ramp)" if r["junction"] == "ramp" else ""
-        print(f"{nm:40s} {r['authors']:4d} {r['weight']:6.2f} "
-              f"{r['video']:4d} {r['text']:4d}  {r['last_seen']}{via}")
+        nm = f"{r['streets'][0]} × {r['streets'][1]}"
+        print(f"{nm:38s} {r['authors']:4d} {r['weight']:6.2f} "
+              f"{r['video']:4d} {r['text']:4d}  {r['last_seen']}")
 
     if dropped:
         print(f"\ndropped, no junction on the graph ({len(dropped)}):")
         for k, c in sorted(dropped.items(), key=lambda kv: -kv[1])[:12]:
-            print(f"   {k[0]} x {k[1]}  ({c}x)")
+            print(f"   {k[0]} × {k[1]}  ({c}×)")
 
     if args.report:
         return 0
 
+    # Geometry: a point per junction. Segment lines need the road
+    # geometry between two junctions, which is snap_traces' job — this
+    # emits the junctions with their support so the map has something
+    # real to render now.
     feats = [{
         "type": "Feature",
         "geometry": {"type": "Point", "coordinates": [r["lon"], r["lat"]]},
