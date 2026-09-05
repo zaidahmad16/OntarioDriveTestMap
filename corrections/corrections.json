@@ -1,9 +1,17 @@
 {
-  "_comment": "Corrections against extracted traces. A correction NEVER silently rewrites a trace. It marks segments as disputed so downstream steps can weight or exclude them, and so the dispute stays visible in the record. Provenance is required on both sides: what the source claimed, and who disputes it.",
+  "_comment": "Corrections against extracted traces and segments. A correction NEVER silently rewrites data. It records a claim, who made it, what evidence supports it, and what would resolve it. Downstream steps read the status and decide; the disagreement stays visible in the record.",
+
+  "_kinds": {
+    "trace_segment": "disputes a span of turns within one source's trace",
+    "segment": "a claim about a road segment in the consensus, independent of any single source"
+  },
+
   "corrections": [
     {
       "id": "corr-001",
-      "created": "2026-09-01",
+      "kind": "trace_segment",
+      "created": "2026-08-31",
+      "updated": "2026-09-04",
       "target": {
         "source_id": "reddit:jt7gwng#route1",
         "centre_id": "walkley",
@@ -18,28 +26,66 @@
         "claim": "route continues north from baycrest to heron road, west along heron, south down sandalwood, back to baycrest"
       },
       "asserted_instead": {
-        "claim": "route stays on baycrest to the traffic light, turns left onto walkley, returns to the test centre",
+        "claim": "the route Zaid drove stays on baycrest to the traffic light, turns left onto walkley, and returns to the test centre",
         "turns": [
           {"direction": "left", "street": "walkley"},
           {"direction": "straight", "street": "@centre"}
         ]
       },
+      "reporter": {"kind": "local_knowledge", "note": "project owner"},
+      "status": "scope_note",
+      "resolution": {
+        "date": "2026-09-03",
+        "outcome": "not disputed",
+        "detail": "Recorded originally as 'disputed', which overstated the claim. Zaid clarified the leg is absent from the route he personally drove and made no claim about routes 2 and 3. OCR across nine Walkley G2 videos subsequently read sandalwood in three of them (sHE72JmAGOA, bVM4POE00a4, MKTsaqTxhQk) and heron in three. The leg appears to be real on a route Zaid has not driven.",
+        "lesson": "When the scope of a correction is unclear, record the narrow version. Local knowledge is the most valuable and least verifiable input this project has; a broad correction that turns out wrong contaminates everything downstream."
+      },
+      "notes": "Route numbers are per-author labels, not identifiers. Zaid has observed that what jt7gwng calls route 2 matches the route he knows as route 1. Corrections must attach to a turn span, never a route number."
+    },
+
+    {
+      "id": "corr-002",
+      "kind": "segment",
+      "created": "2026-09-04",
+      "target": {
+        "segment": ["colliston", "walkley"],
+        "centre_id": "walkley",
+        "test_class": "G",
+        "junction_note": "signalised intersection where Walkley Road meets both Albion Road N and Colliston Crescent"
+      },
+      "claim_in_data": {
+        "verdict_before_correction": "unconfirmed",
+        "video_authors": 7,
+        "text_authors": 0,
+        "mentions": 15,
+        "detail": "Highest video support of any segment in the corpus. Would otherwise render as a high-confidence part of the route."
+      },
+      "asserted_instead": {
+        "claim": "the route does not turn onto Colliston Crescent; it passes straight through the intersection",
+        "segment_status": "drive_past"
+      },
       "reporter": {
         "kind": "local_knowledge",
-        "note": "project owner, familiar with the Walkley area"
+        "note": "project owner, from direct knowledge of the route"
       },
-      "source_reliability_notes": {
-        "firsthand": false,
-        "detail": "jt7gwng is a relayed account. The author states in the same thread that they pulled the three routes from YouTube. Their own firsthand test, post 157tw7n, does not include the heron/sandalwood leg and matches the corrected description.",
-        "corroboration": "none - all four currently routed traces come from this single author"
+      "evidence": {
+        "frame": "eIyLEPqtM_w at t=1037s",
+        "detail": "Dashcam frame shows overhead mast signs reading 'Colliston' on the left and 'Albion N' on the right at a signalised intersection. The vehicle proceeds straight. Both names are legible from the approach regardless of which way the car turns.",
+        "why_pipeline_cannot_detect": [
+          "junction validation passes: the junction is real and the route traverses it",
+          "duration filtering passes: the sign is visible for a normal approach duration",
+          "fuzzy-match checks pass: the OCR read is exactly correct, confirmed by an exact-match run with no fuzzy fallback",
+          "support thresholds pass: 7 authors and 15 mentions clear any realistic bar",
+          "closed-walk constraints pass: it is a valid edge at a node the route uses"
+        ]
       },
-      "geometry_check": {
-        "drivable": true,
-        "detail": "sandalwood drive does connect heron road (node 903984315) to baycrest drive (node 903989000), so the claimed route is physically drivable. The dispute is whether it is used, not whether it exists."
-      },
-      "status": "disputed",
-      "resolution": null,
-      "resolves_when": "an independent firsthand account either names sandalwood or describes the baycrest-to-walkley ending"
+      "why_the_rule_did_not_fire": "The drive-past rule flags a video-only segment when another segment at the same junction has text corroboration. 'albion x walkley' has 0 text authors. reddit:qrwxz3 is the only text trace in the corpus mentioning albion, colliston, kitchener or jasper, so no text source describes this junction at all. The rule is correct and has no evidence to act on.",
+      "status": "confirmed",
+      "resolves_when": "a text source describes the Walkley/Albion junction, at which point the drive-past rule should reach this verdict without manual correction. Reclassifying reddit:qrwxz3 may supply it.",
+      "affects": [
+        "colliston x walkley",
+        "albion x colliston"
+      ]
     }
   ]
 }
