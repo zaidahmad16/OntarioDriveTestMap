@@ -23,8 +23,8 @@ its own:
   random      shuffle the segment set. Establishes the floor.
 
 Usage:
-    python3 validate_consensus.py ../data/out/reddit_traces.json \\
-        ../data/out/ocr_traces.json ../data/out/ocr_traces_g.json \\
+    python3 validate_consensus.py ../data/out/walkley/reddit_traces.json \\
+        ../data/out/walkley/ocr_traces.json ../data/out/walkley/ocr_traces_g.json \\
         --db ../data/osm.db --centre walkley
     python3 validate_consensus.py ... --sweep     # try several thresholds
 """

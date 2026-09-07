@@ -13,7 +13,8 @@ What it does not do: cluster, build consensus, score confidence, or draw
 anything. It converts words to lines. Everything downstream needs lines.
 
 Usage:
-    python3 snap_traces.py traces.json --db ../data/osm.db --out snapped.json
+    python3 snap_traces.py ../data/out/walkley/reddit_traces.json \\
+        --db ../data/osm.db --out ../data/out/walkley/snapped.json
     python3 snap_traces.py traces.json --db ../data/osm.db --dry-run
     python3 snap_traces.py traces.json --db ../data/osm.db --geojson out.geojson
 """
@@ -308,7 +309,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("traces", help="intermediate-form traces json")
     ap.add_argument("--db", default="../data/osm.db")
-    ap.add_argument("--out", default="snapped.json")
+    ap.add_argument("--out", default="../data/out/walkley/snapped.json")
     ap.add_argument("--geojson")
     ap.add_argument("--osrm", default=OSRM_DEFAULT)
     ap.add_argument("--carriageway", choices=["nearest", "first"],

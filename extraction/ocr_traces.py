@@ -33,9 +33,9 @@ Direction is not recoverable from a sign, so turns are emitted as
 junctions in order.
 
 Usage:
-    python3 ocr_traces.py ../data/raw/ocr_results.json \\
+    python3 ocr_traces.py ../data/raw/walkley_ocr_g2.json \\
         --db ../data/osm.db --csv ../data/raw/walkley_sources.csv \\
-        --out ../data/out/ocr_traces.json
+        --out ../data/out/walkley/ocr_traces.json
 """
 
 import argparse
@@ -153,7 +153,7 @@ def main():
     ap.add_argument("results")
     ap.add_argument("--db", default="../data/osm.db")
     ap.add_argument("--csv", default="../data/raw/walkley_sources.csv")
-    ap.add_argument("--out", default="../data/out/ocr_traces.json")
+    ap.add_argument("--out", default="../data/out/walkley/ocr_traces.json")
     ap.add_argument("--max-run", type=float, default=15.0,
                     help="seconds; longer sightings are not passing signs")
     ap.add_argument("--max-per-frame", type=int, default=3,

@@ -8,8 +8,8 @@ segment is. A correction marks the dispute so downstream steps can
 decide, and so the disagreement stays in the record.
 
 Usage:
-    python3 apply_corrections.py ../data/out/snapped.json \\
-        --corrections ../data/corrections.json
+    python3 apply_corrections.py ../data/out/walkley/snapped.json \\
+        --corrections ../corrections/corrections.json
 """
 
 import argparse
@@ -45,7 +45,7 @@ def find_segment(turns, disputed):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("snapped")
-    ap.add_argument("--corrections", default="../data/corrections.json")
+    ap.add_argument("--corrections", default="../corrections/corrections.json")
     ap.add_argument("--out")
     args = ap.parse_args()
 

@@ -23,9 +23,9 @@ Three decisions baked in, each from something that went wrong earlier:
   fact. The map should be able to show the fact.
 
 Usage:
-    python3 build_consensus.py ../data/out/reddit_traces.json \\
-        ../data/out/ocr_traces.json --db ../data/osm.db \\
-        --centre walkley --out ../data/out/consensus.geojson
+    python3 build_consensus.py ../data/out/walkley/reddit_traces.json \\
+        ../data/out/walkley/ocr_traces.json --db ../data/osm.db \\
+        --centre walkley --out ../data/out/walkley/consensus.geojson
 """
 
 import argparse
@@ -106,7 +106,7 @@ def main():
     ap.add_argument("traces", nargs="+")
     ap.add_argument("--db", default="../data/osm.db")
     ap.add_argument("--centre", default="walkley")
-    ap.add_argument("--out", default="../data/out/consensus.geojson")
+    ap.add_argument("--out", default="../data/out/walkley/consensus.geojson")
     ap.add_argument("--min-authors", type=int, default=1)
     ap.add_argument("--report", action="store_true",
                     help="print the table, write nothing")

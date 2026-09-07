@@ -29,10 +29,10 @@ Two things it deliberately does not do:
   what is publishable is a display question, not a geometry one.
 
 Usage:
-    python3 consensus_geometry.py ../data/out/reddit_traces.json \\
-        ../data/out/ocr_traces.json ../data/out/ocr_traces_g.json \\
+    python3 consensus_geometry.py ../data/out/walkley/reddit_traces.json \\
+        ../data/out/walkley/ocr_traces.json ../data/out/walkley/ocr_traces_g.json \\
         --db ../data/osm.db --centre walkley \\
-        --out ../data/out/consensus_routes.geojson
+        --out ../data/out/walkley/consensus_routes.geojson
     python3 consensus_geometry.py ... --dry-run     # no OSRM calls
 """
 
@@ -244,7 +244,7 @@ def main():
     ap.add_argument("traces", nargs="+")
     ap.add_argument("--db", default="../data/osm.db")
     ap.add_argument("--centre", default="walkley")
-    ap.add_argument("--out", default="../data/out/consensus_routes.geojson")
+    ap.add_argument("--out", default="../data/out/walkley/consensus_routes.geojson")
     ap.add_argument("--threshold", type=float, default=0.5,
                     help="minimum summed weight; 0.5 is where leave-one-out "
                          "peaked at F1 0.79, not the design doc's 1.5")

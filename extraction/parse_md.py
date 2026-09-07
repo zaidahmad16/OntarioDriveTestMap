@@ -14,7 +14,10 @@ hash, so correlated-source detection stays possible without the project
 ever storing a name.
 
 Usage:
-    python3 parse_md.py --src ../data/raw/reddit_pages --outdir ../data/out
+    python3 parse_md.py --src ../data/raw/reddit_pages/walkley \\
+        --outdir ../data/out/walkley
+    python3 parse_md.py --src ../data/raw/reddit_pages/canotek \\
+        --outdir ../data/out/canotek
 """
 
 import argparse
@@ -150,8 +153,8 @@ def parse(path, salt):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", default="../data/raw/reddit_pages")
-    ap.add_argument("--outdir", default="../data/out")
+    ap.add_argument("--src", default="../data/raw/reddit_pages/walkley")
+    ap.add_argument("--outdir", default="../data/out/walkley")
     ap.add_argument("--salt", default="ontarioroadtestmap")
     args = ap.parse_args()
 
