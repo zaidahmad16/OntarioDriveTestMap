@@ -6,5 +6,4 @@ __pycache__/
 *.geojson
 data/
 out/
-__pycache__/
 geometry/snapped.json
