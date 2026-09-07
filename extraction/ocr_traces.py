@@ -4,20 +4,38 @@ ocr_traces.py — turn OCR street sightings into intermediate-form traces.
 
 DESTINATION: extraction/ocr_traces.py
 
+Input:  ocr_results.json from the Colab OCR run
+        osm.db, for junction validation
+Output: traces in the same shape as the Reddit ones, so snap_traces.py
+        consumes them without caring where they came from
+
 Four filters, each for a failure mode seen in the real output:
 
-  duration   a real blade sign is visible 1-9s. "parkin" held for 43s —
-             a parking sign or something inside the car, not a street.
-  burst      a frame naming many streets at once is a map overlay or
-             title card. Two "Route Guide" videos opened with eight
-             streets in alphabetical order, which no car ever drives.
-  junction   consecutive streets must meet on the road graph. If OCR
-             reads walkley then verger and no junction exists, verger is
-             a shopfront.
+  duration   a real blade sign is visible 1-9s as the car approaches and
+             passes. "parkin" held for 43s — that is a parking sign or
+             something inside the car, not a street.
+
+  burst      a frame containing many street names at once is a map
+             overlay or title card. Two "Complete Route Guide" videos
+             opened with baycrest, cedarwood, fairlea, gore,
+             heatherington, heron, sandalwood, walkley — alphabetical,
+             which no car ever drives.
+
+  junction   consecutive streets in a route must meet on the road graph.
+             If OCR reads walkley then verger and no junction exists,
+             verger is a shopfront. This is the strongest filter and it
+             uses the index already built for snapping.
+
   dedupe     collapse repeated readings of the same street.
 
-A sign gives no direction, so turns are emitted as "straight" and the
-geometry is recovered by routing through the junctions in order.
+Direction is not recoverable from a sign, so turns are emitted as
+"straight" and the geometry is recovered by routing through the
+junctions in order.
+
+Usage:
+    python3 ocr_traces.py ../data/raw/ocr_results.json \\
+        --db ../data/osm.db --csv ../data/raw/walkley_sources.csv \\
+        --out ../data/out/ocr_traces.json
 """
 
 import argparse
@@ -28,17 +46,11 @@ import re
 import sqlite3
 import sys
 
-SUFFIXES = {"road", "rd", "street", "st", "avenue", "ave", "drive", "dr",
-            "boulevard", "blvd", "parkway", "pkwy", "crescent", "cres",
-            "court", "crt", "lane", "ln", "way", "place", "pl", "private",
-            "terrace", "circle", "trail"}
-
-
-def base_name(s):
-    w = re.sub(r"[^\w\s]", " ", (s or "").lower()).split()
-    while w and w[-1] in SUFFIXES:
-        w.pop()
-    return " ".join(w) if w else (s or "").lower()
+# Shared normaliser. This file previously carried its own copy, which is
+# how "Montréal Road" failed to match at Canotek — no accent folding.
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+from streetnames import load_known, key as base_name, variants as name_variants
 
 
 class Graph:
@@ -47,11 +59,10 @@ class Graph:
         self.con.row_factory = sqlite3.Row
 
     def variants(self, name):
-        b = base_name(name)
-        f = " ".join(re.sub(r"[^\w\s]", " ", (name or "").lower()).split())
-        return list({b, f} - {""})
+        return name_variants(name)
 
     def meet(self, a, b):
+        """Do these two streets share a junction?"""
         va, vb = self.variants(a), self.variants(b)
         pa = ",".join("?" * len(va))
         pb = ",".join("?" * len(vb))
@@ -73,10 +84,15 @@ class Graph:
 
 
 def sightings(hits, max_run, max_per_frame):
+    """Timestamped hits -> [(start, duration, street)], filtered.
+
+    A frame naming many streets at once is screen content, not road
+    signage, so it is dropped before anything else.
+    """
     per = {}
     for h in hits:
         if len(h["streets"]) > max_per_frame:
-            continue
+            continue                     # burst: map overlay or title card
         for s in h["streets"]:
             per.setdefault(base_name(s), []).append(h["t"])
 
@@ -87,7 +103,7 @@ def sightings(hits, max_run, max_per_frame):
         for t in ts[1:] + [None]:
             if t is None or t - prev > 5:
                 dur = prev - start + 1
-                if dur <= max_run:
+                if dur <= max_run:       # duration: long runs are not signs
                     out.append((start, dur, s))
                 if t is not None:
                     start = t
@@ -98,13 +114,21 @@ def sightings(hits, max_run, max_per_frame):
 
 
 def validate(seq, g):
+    """Keep only streets that connect to a neighbour on the road graph.
+
+    A street read once, with no graph connection to what came before or
+    after, is a misread of something that is not a street. Endpoints are
+    checked against their single neighbour.
+    """
     if len(seq) < 2:
         return seq, []
     keep, dropped = [], []
     for i, (t, d, s) in enumerate(seq):
         nb = []
-        lo, hi = max(0, i - 2), min(len(seq), i + 3)
-        nb = [seq[j][2] for j in range(lo, hi) if j != i]
+        if i > 0:
+            nb.append(seq[i - 1][2])
+        if i < len(seq) - 1:
+            nb.append(seq[i + 1][2])
         if any(n != s and g.meet(s, n) for n in nb):
             keep.append((t, d, s))
         else:
@@ -116,6 +140,7 @@ def dedupe(seq):
     out = []
     for t, d, s in seq:
         if out and out[-1][2] == s:
+            # same street seen again immediately: extend, do not repeat
             pt, pd, ps = out[-1]
             out[-1] = (pt, max(pd, t + d - pt), ps)
             continue
@@ -129,13 +154,17 @@ def main():
     ap.add_argument("--db", default="../data/osm.db")
     ap.add_argument("--csv", default="../data/raw/walkley_sources.csv")
     ap.add_argument("--out", default="../data/out/ocr_traces.json")
-    ap.add_argument("--max-run", type=float, default=15.0)
-    ap.add_argument("--max-per-frame", type=int, default=3)
+    ap.add_argument("--max-run", type=float, default=15.0,
+                    help="seconds; longer sightings are not passing signs")
+    ap.add_argument("--max-per-frame", type=int, default=3,
+                    help="frames naming more streets than this are screen "
+                         "content, not signage")
     ap.add_argument("--min-turns", type=int, default=2)
     ap.add_argument("--no-validate", action="store_true")
     args = ap.parse_args()
 
     data = json.load(open(args.results))
+    load_known(args.db)
     g = Graph(args.db)
 
     meta = {}
@@ -166,11 +195,17 @@ def main():
                 "source_id": f"youtube:{vid}",
                 "centre_id": "walkley",
                 "test_class": m.get("test_class", "unknown"),
+                # video with readable street signage. Higher than a text
+                # account: the sequence comes from timestamps rather than
+                # from someone's memory of the order.
                 "reliability": 0.9,
                 "observed_at": (m.get("published") or "")[:10],
                 "author_hash": m.get("channel", ""),
+                # a sign gives no direction, only presence and order
                 "turns": [{"direction": "straight", "street": s}
                           for _, _, s in seq],
+                # per-sighting confidence: a 6s clear read is stronger
+                # evidence than a 1s fuzzy match
                 "sightings": [{"t": t, "dur": d, "street": s}
                               for t, d, s in seq],
             })

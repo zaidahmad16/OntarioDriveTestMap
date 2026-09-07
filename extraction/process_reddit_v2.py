@@ -24,6 +24,7 @@ import os
 import re
 import sqlite3
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
@@ -67,12 +68,17 @@ GAZETTEER = [
 GAZ = set()
 
 
+def _fold(s):
+    s = unicodedata.normalize("NFKD", s or "")
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
 def load_gazetteer(db):
-    """Every distinct street name in the extract, both forms."""
+    """Every distinct street name in the extract, both forms, folded."""
     con = sqlite3.connect(db)
-    out = {r[0] for r in con.execute("SELECT DISTINCT base FROM streets")
+    out = {_fold(r[0]) for r in con.execute("SELECT DISTINCT base FROM streets")
            if r[0]}
-    out |= {r[0] for r in con.execute("SELECT DISTINCT full FROM streets")
+    out |= {_fold(r[0]) for r in con.execute("SELECT DISTINCT full FROM streets")
             if r[0]}
     con.close()
     return out
@@ -214,6 +220,12 @@ def clean_street(raw):
     """
     if not raw:
         return None
+    # Fold accents before anything else. OSM has "Montréal Road" and
+    # every Reddit author writes "Montreal Road"; without folding the
+    # two never match, and at Canotek that is the backbone of the G2
+    # route.
+    raw = unicodedata.normalize("NFKD", raw)
+    raw = "".join(c for c in raw if not unicodedata.combining(c))
     s = re.sub(r"\s+", " ", raw).strip().strip(".,;:!?-'\"")
     if not s:
         return None
@@ -225,6 +237,22 @@ def clean_street(raw):
     if low in CENTRE_TOKENS or any(
             low == f"{a} {b}" for a in ("the", "a") for b in CENTRE_TOKENS):
         return "@centre"
+
+    # Check the whole phrase against the gazetteer before truncating.
+    # "east acres" would otherwise die on "east" being a stopword, and
+    # East Acres Road is on the Canotek route. Directional words are
+    # genuine street-name components in the east end.
+    if GAZ:
+        whole = low
+        if whole in GAZ:
+            return whole
+        stripped = whole
+        for suf in ("road", "street", "drive", "avenue", "crescent", "way"):
+            if stripped.endswith(" " + suf):
+                stripped = stripped[: -len(suf) - 1]
+                break
+        if stripped in GAZ:
+            return stripped
 
     kept = []
     for w in low.split():

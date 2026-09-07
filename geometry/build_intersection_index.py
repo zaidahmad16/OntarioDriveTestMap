@@ -35,6 +35,7 @@ import argparse
 import os
 import re
 import sqlite3
+import unicodedata
 import sys
 from collections import defaultdict
 
@@ -59,9 +60,17 @@ SUFFIXES = {
 }
 
 
+
 def full_form(name):
-    s = re.sub(r"[^\w\s]", " ", (name or "").lower())
-    return " ".join(s.split())
+    """Normalised, suffix intact, accents folded.
+
+    Folding must happen at index build time, not only at query time.
+    OSM stores "Montréal Road"; every source writes "Montreal Road".
+    Storing the accented form makes the street unreachable.
+    """
+    s = unicodedata.normalize("NFKD", name or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^\w\s]", " ", s.lower()).split())
 
 
 def normalise(name):

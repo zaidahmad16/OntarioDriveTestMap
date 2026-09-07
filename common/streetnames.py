@@ -41,6 +41,7 @@ Usage:
 
 import re
 import sqlite3
+import unicodedata
 
 SUFFIXES = {
     "road", "rd", "street", "st", "avenue", "ave", "drive", "dr",
@@ -61,8 +62,20 @@ _LOADED = False
 
 
 def clean(name):
-    """Lowercase, strip punctuation, collapse whitespace. No suffix logic."""
-    return " ".join(re.sub(r"[^\w\s]", " ", (name or "").lower()).split())
+    """Lowercase, fold accents, strip punctuation, collapse whitespace.
+
+    Accent folding is not cosmetic. OSM has "Montréal Road"; every Reddit
+    author writes "Montreal Road". Without folding, the backbone of the
+    Canotek G2 route resolves to nothing — 11 junction failures across 7
+    traces, all on that one street, while four independent authors had
+    correctly described it.
+
+    NFKD splits an accented character into a base letter plus a combining
+    mark; dropping the combining marks leaves the plain letter.
+    """
+    s = unicodedata.normalize("NFKD", name or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^\w\s]", " ", s.lower()).split())
 
 
 def strip_suffix(name):

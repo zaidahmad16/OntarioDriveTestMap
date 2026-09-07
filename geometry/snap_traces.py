@@ -83,7 +83,12 @@ class Index:
                "boulevard","blvd","parkway","pkwy","crescent","cres","court",
                "crt","ct","lane","ln","way","place","pl","terrace","terr",
                "circle","cir","trail","private","north","south","east","west"}
-        s = re.sub(r"[^\w\s]", " ", (name or "").lower())
+        # Fold accents: OSM has "Montréal Road", every source writes
+        # "Montreal Road". Without this the street is unreachable.
+        import unicodedata
+        n = unicodedata.normalize("NFKD", name or "")
+        n = "".join(c for c in n if not unicodedata.combining(c))
+        s = re.sub(r"[^\w\s]", " ", n.lower())
         w = [x for x in s.split() if x]
         full = " ".join(w)
         base = list(w)
@@ -136,11 +141,18 @@ class Index:
             "SELECT centre_id, name, lat, lon FROM centres").fetchall()
         if not rows:
             return None
+        # Match against the trace's centre_id. centre_id can be
+        # "walkley|canotek" when the text names both, so test each part.
         if centre_id:
-            for r in rows:
-                if centre_id.lower() in (r["centre_id"] or "").lower():
-                    return r
-        return rows[0]
+            for part in str(centre_id).lower().split("|"):
+                for r in rows:
+                    if part and part in (r["centre_id"] or "").lower():
+                        return r
+        # No fallback. Returning rows[0] resolved every Canotek trace to
+        # Walkley, 12 km west — a 28.64 km route and a 0.00 km one, both
+        # plausible-looking. Failing to resolve is recoverable; silently
+        # resolving to the wrong city is not.
+        return None
 
     def known(self, name):
         v = self.variants(name)
@@ -180,7 +192,8 @@ def resolve(trace, idx, policy="nearest"):
         # A pair naming the centre resolves to the centre point, not to a
         # junction. Handles both "left into test centre" at the end and
         # the implicit start.
-        ca, cb = idx.centre(a), idx.centre(b)
+        cid = trace.get("centre_id")
+        ca, cb = idx.centre(a, cid), idx.centre(b, cid)
         if ca or cb:
             c = ca or cb
             points.append({"node_id": f"centre:{c['centre_id']}",
@@ -247,6 +260,23 @@ def resolve(trace, idx, policy="nearest"):
                     # distances puts the waypoint where no shortcut wins.
                     e1 = (points[-2]["lat"], points[-2]["lon"])
                     e2 = (r["lat"], r["lon"])
+                    # But a traverse midpoint belongs on a SHORT street.
+                    # Fairlea Crescent is 200 m end to end. Blair Road is
+                    # kilometres, so its furthest-from-both-ends midpoint
+                    # sat 2.8 km off-route and OSRM drove there and back,
+                    # 5.6 km of a 16.21 km trace. Cap the detour.
+                    span = haversine(e1, e2)
+                    cap = max(400.0, span * 2.0)
+                    near = [x for x in mids
+                            if haversine(e1, (x["lat"], x["lon"])) <= cap
+                            and haversine(e2, (x["lat"], x["lon"])) <= cap]
+                    # No fallback. If nothing lies within the cap, the
+                    # two junctions are not the ends of a short street
+                    # being traversed — they are the two carriageways of
+                    # one intersection. Inserting a midpoint anyway sent
+                    # the route 4.9 km down Airport Parkway and back.
+                    mids = near
+                if mids:
                     m = max(mids, key=lambda x: min(
                         haversine(e1, (x["lat"], x["lon"])),
                         haversine(e2, (x["lat"], x["lon"]))))
