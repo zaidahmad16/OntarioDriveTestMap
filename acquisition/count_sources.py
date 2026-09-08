@@ -258,7 +258,11 @@ def attribute_centre(title, desc, cfg, streets):
     supports it, "other:<name>" when a sibling centre is named, and
     "unverified" when nothing does.
     """
-    blob = f"{title} {desc}".lower()
+    # Strip hashtags before matching. Driving-school channels tag every
+    # town they might rank for ("#smithsfalls #perth #cornwall..."), and
+    # a name appearing only in that list is not a claim about what the
+    # video covers.
+    blob = re.sub(r"#\w+", "", f"{title} {desc}").lower()
 
     for sib in cfg["siblings"]:
         if sib in blob and not any(a in blob for a in cfg["aliases"]):
@@ -376,6 +380,7 @@ def main():
             "video_id": vid,
             "url": f"https://youtube.com/watch?v={vid}",
             "title": title,
+            "description": desc,
             "channel": sn.get("channelTitle", ""),
             "published": (sn.get("publishedAt") or "")[:10],
             "duration_s": dur,
