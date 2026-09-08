@@ -78,14 +78,24 @@ CENTRES = {
         # approximate — 5303 Canotek Rd. Verified against osm.db at run
         # time if the centre is tagged amenity=driver_testing there.
         "lat": 45.4497, "lon": -75.5744,
-        "aliases": ["canotek", "gloucester"],
+        # "gloucester" removed: Walkley Road is also in the former City
+        # of Gloucester, so the alias let two Walkley videos through the
+        # sibling filter and into the verified Canotek set.
+        "aliases": ["canotek"],
         "siblings": ["walkley", "smiths falls", "smithsfalls", "winchester",
                      "kanata", "almonte", "carleton place"],
+        # Two of the genuine Canotek dashcam videos have Arabic and
+        # French titles, so English-only queries under-collect here.
         "queries": [
             "Ottawa Canotek G2 road test route",
             "Ottawa Canotek G road test route",
             "Canotek DriveTest Ottawa test route dashcam",
             "Ottawa Canotek driving test full route",
+            "Canotek road test Blair",
+            "Ottawa east end driving test route",
+            "Canotek G2 test Innes Ogilvie",
+            "امتحان القيادة أوتاوا كانوتيك",
+            "examen de conduite Ottawa Canotek",
         ],
     },
     "smithsfalls": {

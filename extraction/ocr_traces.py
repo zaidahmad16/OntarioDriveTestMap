@@ -153,6 +153,8 @@ def main():
     ap.add_argument("results")
     ap.add_argument("--db", default="../data/osm.db")
     ap.add_argument("--csv", default="../data/raw/walkley_sources.csv")
+    ap.add_argument("--centre", default="walkley",
+                    help="centre id to stamp on every trace, e.g. canotek")
     ap.add_argument("--out", default="../data/out/walkley/ocr_traces.json")
     ap.add_argument("--max-run", type=float, default=15.0,
                     help="seconds; longer sightings are not passing signs")
@@ -193,7 +195,7 @@ def main():
         if len(seq) >= args.min_turns:
             traces.append({
                 "source_id": f"youtube:{vid}",
-                "centre_id": "walkley",
+                "centre_id": args.centre,
                 "test_class": m.get("test_class", "unknown"),
                 # video with readable street signage. Higher than a text
                 # account: the sequence comes from timestamps rather than

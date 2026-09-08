@@ -38,6 +38,10 @@ import sqlite3
 import sys
 from collections import defaultdict
 
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+from streetnames import load_known, key, variants as name_variants
+
 class Graph:
     def __init__(self, db):
         self.con = sqlite3.connect(db)
