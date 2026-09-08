@@ -107,6 +107,11 @@ CENTRES = {
             "Smiths Falls G2 road test route",
             "Smiths Falls G road test route",
             "Smiths Falls DriveTest route dashcam",
+            "Smiths Falls driving test",
+            "Smiths Falls road test dashcam",
+            "Smith Falls G2 test route",
+            "DriveTest Smiths Falls route",
+            "Smiths Falls driving test pass",
         ],
     },
     "winchester": {
