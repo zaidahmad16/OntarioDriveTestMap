@@ -101,7 +101,7 @@ CENTRES = {
     "smithsfalls": {
         "name": "Smiths Falls",
         "lat": 44.9012, "lon": -76.0214,
-        "aliases": ["smiths falls", "smith falls", "smithsfalls"],
+        "aliases": ["smiths falls", "smith falls", "smithsfalls", "smith fall"],
         "siblings": ["walkley", "canotek", "winchester", "ottawa"],
         "queries": [
             "Smiths Falls G2 road test route",
