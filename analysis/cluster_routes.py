@@ -20,8 +20,8 @@ coarser than OSM way ids (works on unsnapped traces too, so partials and
 failures still cluster).
 
 Usage:
-    python3 cluster_routes.py ../data/out/reddit_traces.json \\
-        ../data/out/ocr_traces.json --class G2 --centre walkley
+    python3 cluster_routes.py ../data/out/walkley/reddit_traces.json \\
+        ../data/out/walkley/ocr_traces.json --class G2 --centre walkley
     python3 cluster_routes.py ... --no-idf     # show the naive result
 """
 

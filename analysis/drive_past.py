@@ -33,10 +33,10 @@ source overall — 0 of 20 video traces failed junction resolution against
 11 of 20 text traces — and nothing here discounts video generally.
 
 Usage:
-    python3 drive_past.py ../data/out/reddit_traces.json \\
-        ../data/out/ocr_traces.json ../data/out/ocr_traces_g.json \\
+    python3 drive_past.py ../data/out/walkley/reddit_traces.json \\
+        ../data/out/walkley/ocr_traces.json ../data/out/walkley/ocr_traces_g.json \\
         --db ../data/osm.db --centre walkley
-    python3 drive_past.py ... --apply --out ../data/out/segments.json
+    python3 drive_past.py ... --apply --out ../data/out/walkley/segments.json
 """
 
 import argparse
@@ -167,7 +167,7 @@ def main():
                     help="video authors needed before a segment can be "
                          "called a drive-past rather than merely weak")
     ap.add_argument("--apply", action="store_true")
-    ap.add_argument("--out", default="../data/out/segments.json")
+    ap.add_argument("--out", default="../data/out/walkley/segments.json")
     args = ap.parse_args()
 
     n_names, _ = load_known(args.db)

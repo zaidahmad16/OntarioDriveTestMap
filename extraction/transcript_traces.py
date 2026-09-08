@@ -133,7 +133,7 @@ def main():
     ap.add_argument("--transcripts", default="../data/raw/transcripts")
     ap.add_argument("--csv", default="../data/raw/walkley_sources.csv")
     ap.add_argument("--db", default="../data/osm.db")
-    ap.add_argument("--out", default="../data/out/youtube_traces.json")
+    ap.add_argument("--out", default="../data/out/walkley/youtube_traces.json")
     ap.add_argument("--lat", type=float, default=45.376146)
     ap.add_argument("--lon", type=float, default=-75.647589)
     ap.add_argument("--min-turns", type=int, default=2)
