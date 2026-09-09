@@ -181,7 +181,7 @@ def build(pbf_path, db_path, keep_service=True, ramps=True):
         "smithsfalls": (44.9012, -76.0214),
         "winchester":  (45.0847, -75.3495),
     }
-    MATCH_RADIUS_DEG = 0.02  # roughly 2km
+    MATCH_RADIUS_DEG = 0.03  # roughly 3km, widened for Winchester
 
     def nearest_known(lat, lon):
         best_id, best_dist = None, MATCH_RADIUS_DEG
