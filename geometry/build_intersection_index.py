@@ -167,33 +167,75 @@ def build(pbf_path, db_path, keep_service=True, ramps=True):
     print(f"  unnamed link ways:   {wp.links:,}")
     print(f"  nodes touched:       {len(node_streets):,}")
 
+    # Known launch-centre coordinates. OSM tagging for these is
+    # inconsistent (Walkley has amenity=driver_testing, Canotek doesn't;
+    # both happen to share the plain name "DriveTest"), so centre_id
+    # is assigned by nearest known coordinate, not derived from
+    # whatever OSM's own name/tag happens to be. Deriving centre_id
+    # from name alone caused two centres to silently collide onto the
+    # same primary key with INSERT OR REPLACE, dropping one to a
+    # single surviving row.
+    KNOWN_CENTRES = {
+        "walkley":     (45.376145807017544, -75.64758859649123),
+        "canotek":     (45.4497, -75.5744),
+        "smithsfalls": (44.9012, -76.0214),
+        "winchester":  (45.0847, -75.3495),
+    }
+    MATCH_RADIUS_DEG = 0.02  # roughly 2km
+
+    def nearest_known(lat, lon):
+        best_id, best_dist = None, MATCH_RADIUS_DEG
+        for cid, (klat, klon) in KNOWN_CENTRES.items():
+            d = ((lat - klat) ** 2 + (lon - klon) ** 2) ** 0.5
+            if d < best_dist:
+                best_id, best_dist = cid, d
+        return best_id
+
+    def looks_like_drivetest(tags):
+        if tags.get("amenity") == "driver_testing":
+            return True
+        name = (tags.get("name") or "").lower()
+        return "drivetest" in name.replace(" ", "")
+
     centres = []
+    seen_ids = set()
 
     class CentrePass(osmium.SimpleHandler):
         def way(self, w):
-            if w.tags.get("amenity") != "driver_testing":
+            if not looks_like_drivetest(w.tags):
                 return
             pts = [(n.lat, n.lon) for n in w.nodes if n.location.valid()]
             if not pts:
                 return
+            lat = sum(p[0] for p in pts) / len(pts)
+            lon = sum(p[1] for p in pts) / len(pts)
+            cid = nearest_known(lat, lon)
+            if not cid or cid in seen_ids:
+                return
+            seen_ids.add(cid)
             centres.append((
-                (w.tags.get("name") or f"centre{w.id}").lower().replace(" ", ""),
-                w.tags.get("name"),
+                cid, w.tags.get("name"),
                 f"{w.tags.get('addr:housenumber','')} "
                 f"{w.tags.get('addr:street','')}".strip(),
-                sum(p[0] for p in pts) / len(pts),
-                sum(p[1] for p in pts) / len(pts),
-                w.id))
+                lat, lon, w.id))
 
         def node(self, n):
-            if n.tags.get("amenity") == "driver_testing" and n.location.valid():
-                centres.append((
-                    (n.tags.get("name") or f"centre{n.id}").lower().replace(" ", ""),
-                    n.tags.get("name"), "", n.location.lat, n.location.lon, n.id))
+            if not looks_like_drivetest(n.tags) or not n.location.valid():
+                return
+            cid = nearest_known(n.location.lat, n.location.lon)
+            if not cid or cid in seen_ids:
+                return
+            seen_ids.add(cid)
+            centres.append((
+                cid, n.tags.get("name"), "",
+                n.location.lat, n.location.lon, n.id))
 
     print("pass 1b: test centres")
     CentrePass().apply_file(pbf_path, locations=True)
     print(f"  found:               {len(centres)}")
+    for cid in KNOWN_CENTRES:
+        if cid not in seen_ids:
+            print(f"  MISSING:             {cid} (no OSM element matched within {MATCH_RADIUS_DEG}deg)")
 
     # A junction is a node where two or more DISTINCT street names meet.
     # Comparing names not way ids, since one street is split across many
