@@ -319,7 +319,7 @@ def main():
 
     seen, ids = set(), []
     for q in cfg["queries"]:
-        found = search(key, q, args.max_results)
+        found = list(dict.fromkeys(search(key, q, args.max_results)))
         new = [v for v in found if v not in seen]
         seen.update(new)
         ids += new
