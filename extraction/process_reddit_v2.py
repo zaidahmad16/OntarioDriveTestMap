@@ -126,14 +126,15 @@ TURN_WITH_STREET = re.compile(
     r"\b(?:turn(?:ed|ing|s)?\s+|go\s+|head(?:ed|ing)?\s+|make\s+a\s+|"
     r"took\s+a\s+)?" + DIRECTION +
     r"\s+(?:turn\s+)?(?:on|onto|at|in\s?to|into|down|to|towards?|toward)"
-    r"\s+(?:the\s+)?"
-    r"([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,2})",
+    r"[ \t]+(?:the[ \t]+)?"
+    r"([A-Za-z][A-Za-z'\-]*(?:[ \t]+[A-Za-z][A-Za-z'\-]*){0,2})",
     re.IGNORECASE)
 
 STRAIGHT_WITH_STREET = re.compile(
-    r"\b(?:continue|merge|stay|proceed|drive|get)\s+(?:straight\s+)?"
-    r"(?:on|onto|along)\s+(?:the\s+)?"
-    r"([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,2})",
+    r"\b(?:continue|merge|stay|proceed|drive|get|follow(?:\s+the\s+curve)?|"
+    r"follow\s+curve)\s+(?:straight\s+)?"
+    r"(?:on|onto|along|in\s?to|into)\s+(?:the\s+)?"
+    r"([A-Za-z][A-Za-z'\-]*(?:[ \t]+[A-Za-z][A-Za-z'\-]*){0,2})",
     re.IGNORECASE)
 
 BARE_TURN = re.compile(
@@ -260,8 +261,16 @@ def clean_street(raw):
         if not w:
             break
         if w in SUFFIX_WORDS:
+            # A suffix word ends the name -- but only once something real
+            # has been collected. "St" as the FIRST word is a prefix
+            # ("St Lawrence", "St Joseph"), not a suffix, and treating it
+            # as one truncates every Saint-prefixed street to just "st",
+            # which then fails the length check and vanishes entirely.
+            if kept:
+                kept.append(w)
+                break
             kept.append(w)
-            break                      # a suffix ends the name
+            continue
         if w in STOPWORDS:
             break
         if len(kept) >= 3:
