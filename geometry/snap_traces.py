@@ -309,7 +309,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("traces", help="intermediate-form traces json")
     ap.add_argument("--db", default="../data/osm.db")
-    ap.add_argument("--out", default="../data/out/walkley/snapped.json")
+    ap.add_argument("--out", required=True,
+                    help="no default -- a hardcoded Walkley path here once "
+                         "silently overwrote another centre's output")
     ap.add_argument("--geojson")
     ap.add_argument("--osrm", default=OSRM_DEFAULT)
     ap.add_argument("--carriageway", choices=["nearest", "first"],
