@@ -92,6 +92,12 @@ NOT_A_STREET = {
     # meaning Regional Road 174/34). The digit breaks street capture right
     # after "Ottawa", leaving the city name looking like a captured street.
     "ottawa",
+    # Bare "the" alone, not a street -- "Right onto the 174 westbound
+    # onramp" leaves "the" looking like a captured street once the digit
+    # breaks capture. Genuinely exists in the OSM gazetteer as a fragment
+    # of "The Queensway" (Regional Road 174's alt_name), so it clears the
+    # whole-phrase gazetteer lookup before the STOPWORDS check ever runs.
+    "the",
 }
 
 # Not streets either, but they ARE locations, and every route in the
