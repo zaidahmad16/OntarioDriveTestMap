@@ -87,6 +87,11 @@ def load_gazetteer(db):
 # Not streets, however the regex captures them.
 NOT_A_STREET = {
     "the median", "the highway", "the road", "the street", "the lot",
+    # "Ottawa" alone, not a street -- Ottawa-area writers commonly prefix
+    # regional road numbers with the city name ("Ottawa 174", "Ottawa 34"
+    # meaning Regional Road 174/34). The digit breaks street capture right
+    # after "Ottawa", leaving the city name looking like a captured street.
+    "ottawa",
 }
 
 # Not streets either, but they ARE locations, and every route in the
@@ -238,6 +243,23 @@ def clean_street(raw):
     if low in CENTRE_TOKENS or any(
             low == f"{a} {b}" for a in ("the", "a") for b in CENTRE_TOKENS):
         return "@centre"
+    # "Drive Test parking lot", "drivetest building", etc. -- a longer
+    # phrase that STARTS with the centre token, not an exact match to it.
+    # Scoped to just "drive test"/"drivetest" rather than all of
+    # CENTRE_TOKENS: several tokens are short, common words ("centre",
+    # "center") that could legitimately start an unrelated real street
+    # name, and a blanket prefix rule would misfire on those.
+    if low.startswith("drive test ") or low.startswith("drivetest "):
+        return "@centre"
+
+    # Explicitly-blacklisted words are rejected before the gazetteer
+    # check, not after it. The province-wide OSM gazetteer is large
+    # enough (19,633 names) that words like "ottawa" coincidentally
+    # match a real street somewhere in it, unrelated to the centre
+    # actually being processed -- checking NOT_A_STREET only after that
+    # whole-phrase lookup meant the blacklist entry was never reached.
+    if low in NOT_A_STREET:
+        return None
 
     # Check the whole phrase against the gazetteer before truncating.
     # "east acres" would otherwise die on "east" being a stopword, and
