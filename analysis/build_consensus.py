@@ -71,7 +71,7 @@ class Graph:
         return out
 
 
-def age_weight(observed, half_life_years=3.0):
+def age_weight(observed, half_life_years=5.0):
     """Routes change. A 2013 account is weaker evidence than a 2025 one.
 
     Exponential decay rather than a cutoff — a cutoff throws away the

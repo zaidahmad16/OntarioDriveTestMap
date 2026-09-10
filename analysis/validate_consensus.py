@@ -85,7 +85,7 @@ class Graph:
         return self._ok[k]
 
 
-def age_weight(observed, hl=3.0):
+def age_weight(observed, hl=5.0):
     if not observed:
         return 0.6
     try:
