@@ -119,6 +119,16 @@ CENTRES = {
         "lat": 45.0847, "lon": -75.3495,
         "aliases": ["winchester"],
         "siblings": ["walkley", "canotek", "smiths falls", "ottawa"],
+        # "winchester" is also a real city in Hampshire, England, with
+        # its own large, unrelated body of UK driving-test content
+        # (DVSA exams, not Ontario's MTO). Roughly a third of search
+        # results for "Winchester driving test" turned out to be about
+        # that Winchester, not this one, and the alias match alone
+        # could not tell them apart. These terms only ever appear in
+        # the UK content and disqualify a match regardless of the
+        # "winchester" alias.
+        "disqualifiers": ["hampshire", "southampton", "dvsa", "maybush",
+                           "hants", "uk driving test", "highway code"],
         "queries": [
             "Winchester Ontario G2 road test route",
             "Winchester DriveTest road test route",
@@ -263,6 +273,13 @@ def attribute_centre(title, desc, cfg, streets):
     # a name appearing only in that list is not a claim about what the
     # video covers.
     blob = re.sub(r"#\w+", "", f"{title} {desc}").lower()
+
+    # A disqualifying term (e.g. Hampshire signals for the OTHER
+    # Winchester) overrides any alias match -- checked before anything
+    # else, since an alias match alone cannot tell the two apart.
+    disqualifiers = cfg.get("disqualifiers", [])
+    if any(d in blob for d in disqualifiers):
+        return "unverified", "disqualifying term matched a same-named place elsewhere"
 
     for sib in cfg["siblings"]:
         if sib in blob and not any(a in blob for a in cfg["aliases"]):
