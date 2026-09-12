@@ -2,6 +2,8 @@
 """
 apply_corrections.py — mark disputed segments on snapped traces.
 
+DESTINATION: geometry/apply_corrections.py
+
 A correction never rewrites a trace. Silently editing source data would
 destroy the thing this project is for: knowing how well supported each
 segment is. A correction marks the dispute so downstream steps can

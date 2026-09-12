@@ -29,6 +29,8 @@ def download(vid, outdir, height):
     out = os.path.join(outdir, f"{vid}.mp4")
     if os.path.exists(out):
         return out
+    # Video and audio are separate streams above the lowest quality;
+    # this takes the best of each under `height` and lets yt-dlp mux them.
     subprocess.run(
         ["yt-dlp", "-f",
          f"bestvideo[height<={height}]+bestaudio/best[height<={height}]",
@@ -39,6 +41,8 @@ def download(vid, outdir, height):
 
 def frames(video, outdir, fps, crop_top, scale_w):
     os.makedirs(outdir, exist_ok=True)
+    # Crops to the top crop_top fraction — where signs are, never the
+    # road surface — so frames OCR faster and upload smaller.
     vf = f"fps={fps},crop=in_w:in_h*{crop_top}:0:0,scale={scale_w}:-2"
     subprocess.run(
         ["ffmpeg", "-loglevel", "error", "-i", video, "-vf", vf,

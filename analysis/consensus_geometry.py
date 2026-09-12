@@ -34,6 +34,13 @@ Usage:
         --db ../data/osm.db --centre walkley \\
         --out ../data/out/walkley/consensus_routes.geojson
     python3 consensus_geometry.py ... --dry-run     # no OSRM calls
+    python3 consensus_geometry.py ... --check-drive-past   # see below
+
+--check-drive-past runs drive_past.py's classifier over the same traces
+and warns about any segment in THIS run's output it calls drive-past or
+unconfirmed (video-only, no text at that junction). Doesn't drop or alter
+anything — a human still decides via corrections.json, same as corr-002.
+Off by default: it re-reads every trace file a second time.
 """
 
 import argparse
@@ -52,6 +59,9 @@ from collections import defaultdict
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "common"))
 from streetnames import load_known, key, variants as name_variants
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import drive_past
 
 OSRM = "https://router.project-osrm.org/route/v1/driving"
 UA = "OntarioRoadTestMap/0.1 (research; ontariodrivetestmap.fyi)"
@@ -87,7 +97,8 @@ class Graph:
         return dict(r) if r else None
 
 
-def age_weight(observed, hl=3.0):
+def age_weight(observed, hl=5.0):
+    # exponential decay, not a cutoff — an old trace still counts, just less
     if not observed:
         return 0.6
     try:
@@ -98,6 +109,8 @@ def age_weight(observed, hl=3.0):
 
 
 def source_weight(t):
+    # video weighs more because it can't skip a street the way recall can,
+    # not because it's video
     if t["source_id"].startswith("youtube"):
         return 0.9
     n = len(t.get("turns", []))
@@ -105,6 +118,7 @@ def source_weight(t):
 
 
 def trace_segments(t, g):
+    """Ordered turns -> graph-valid street-pair segments."""
     st = [x["street"] for x in t.get("turns", [])]
     out = []
     for a, b in zip(st, st[1:]):
@@ -206,8 +220,13 @@ def order_walk(seg, keep):
     unused = set(keep)
     runs = []
     while unused:
-        # start at the most-connected unused street, so the spine leads
-        start = max({s for k in unused for s in k},
+        # start at the most-connected unused street, so the spine leads.
+        # sorted() before max(): plain set iteration order depends on
+        # Python's per-process hash randomization, so ties (every leaf
+        # street is degree 1) broke to a different street each run, and
+        # a different start split the same edges into a different set
+        # of runs. Sorting makes the street name itself the tiebreak.
+        start = max(sorted({s for k in unused for s in k}),
                     key=lambda s: len([1 for _, k in adj[s] if k in unused]))
         run, cur = [], start
         while True:
@@ -252,6 +271,10 @@ def main():
     ap.add_argument("--corrections", default="../corrections/corrections.json")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--pause", type=float, default=1.0)
+    ap.add_argument("--check-drive-past", action="store_true",
+                    help="warn about published segments that drive_past.py "
+                         "classifies as drive-past or unconfirmed; does not "
+                         "remove anything, see module docstring")
     args = ap.parse_args()
 
     load_known(args.db)
@@ -291,6 +314,7 @@ def main():
           f"(+{len(fam.get(-1, []))} unclustered)\n")
 
     feats = []
+    published = set()
     for fid in sorted(real):
         traces = real[fid]
         seg = support(traces, g)
@@ -305,6 +329,7 @@ def main():
                 dropped += 1
                 continue
             keep.append(k)
+        published.update(keep)
 
         runs = order_walk(seg, keep)
         streets = sorted({s for k in keep for s in k})
@@ -361,6 +386,24 @@ def main():
                 },
             })
         print()
+
+    if args.check_drive_past:
+        dpg = drive_past.Graph(args.db)
+        dseg, _ = drive_past.gather(args.traces, dpg, args.centre)
+        verdicts = drive_past.classify(dseg)
+        flagged = {k: v for k, v in verdicts.items()
+                   if k in published and v["verdict"] in
+                   ("drive-past", "unconfirmed")}
+        if flagged:
+            print(f"drive-past check: {len(flagged)} published segment(s) "
+                  f"flagged\n")
+            for k, v in flagged.items():
+                print(f"  ! {k[0]} × {k[1]}  [{v['verdict']}]  {v['why']}")
+            print("\n  Not removed from output. Review against "
+                  "corrections/corrections.json and add a 'segment' "
+                  "correction if this is a real drive-past.\n")
+        else:
+            print("drive-past check: no published segment flagged\n")
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     json.dump({"type": "FeatureCollection",

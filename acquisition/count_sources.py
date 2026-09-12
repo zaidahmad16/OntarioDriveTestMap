@@ -275,7 +275,7 @@ def attribute_centre(title, desc, cfg, streets):
     blob = re.sub(r"#\w+", "", f"{title} {desc}").lower()
 
     # A disqualifying term (e.g. Hampshire signals for the OTHER
-    # Winchester) overrides any alias match -- checked before anything
+    # Winchester) overrides any alias match — checked before anything
     # else, since an alias match alone cannot tell the two apart.
     disqualifiers = cfg.get("disqualifiers", [])
     if any(d in blob for d in disqualifiers):

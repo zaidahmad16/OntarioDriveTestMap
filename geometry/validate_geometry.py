@@ -2,6 +2,13 @@
 """
 validate_geometry.py — does the street-names-to-polyline path work at all?
 
+DESTINATION: geometry/validate_geometry.py
+
+SUPERSEDED — kept for historical reference, not part of the live pipeline.
+build_intersection_index.py + snap_traces.py are the "real version" this
+docstring predicted: a local OSM extract and a local OSRM instance. Nothing
+in the pipeline calls this file anymore.
+
 Twenty-minute validation of the riskiest untested step. Takes an ordered
 list of streets, converts consecutive pairs into intersections, geocodes
 them, feeds the coordinates to OSRM, and reports whether a road-snapped

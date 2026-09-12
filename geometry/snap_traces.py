@@ -2,6 +2,8 @@
 """
 snap_traces.py — turn ordered street names into map geometry.
 
+DESTINATION: geometry/snap_traces.py
+
 Input:  traces in intermediate form (ordered turns naming streets)
         osm.db, the offline intersection index
 Output: one polyline per trace, plus the OSM node sequence along it
@@ -28,6 +30,10 @@ import time
 import urllib.parse
 import urllib.request
 from collections import Counter
+
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "common"))
+from streetnames import load_known, variants as name_variants
 
 OSRM_DEFAULT = "https://router.project-osrm.org/route/v1/driving"
 UA = "OntarioRoadTestMap/0.1 (research; ontariodrivetestmap.fyi)"
@@ -77,25 +83,10 @@ class Index:
                              f"build_intersection_index.py")
         self.con = sqlite3.connect(path)
         self.con.row_factory = sqlite3.Row
+        load_known(path)
 
     def variants(self, name):
-        import re
-        SUF = {"road","rd","street","st","avenue","ave","drive","dr",
-               "boulevard","blvd","parkway","pkwy","crescent","cres","court",
-               "crt","ct","lane","ln","way","place","pl","terrace","terr",
-               "circle","cir","trail","private","north","south","east","west"}
-        # Fold accents: OSM has "Montréal Road", every source writes
-        # "Montreal Road". Without this the street is unreachable.
-        import unicodedata
-        n = unicodedata.normalize("NFKD", name or "")
-        n = "".join(c for c in n if not unicodedata.combining(c))
-        s = re.sub(r"[^\w\s]", " ", n.lower())
-        w = [x for x in s.split() if x]
-        full = " ".join(w)
-        base = list(w)
-        while base and base[-1] in SUF:
-            base.pop()
-        return list({full, " ".join(base)} - {""})
+        return name_variants(name)
 
     def junctions(self, a, b):
         va, vb = self.variants(a), self.variants(b)
@@ -247,9 +238,7 @@ def resolve(trace, idx, policy="nearest"):
             # consecutive pair shares a street too — that is just an
             # ordinary turn and needs no midpoint.
             if sorted(prv) == sorted([a, b]) and prv != [a, b]:
-                street = b if prv[1] == b else a
-                street = list({a, b} & set(prv))[0] if False else (
-                    prv[1] if prv[1] in (a, b) and prv[1] != prv[0] else a)
+                street = prv[1] if prv[1] in (a, b) and prv[1] != prv[0] else a
                 mids = idx.midpoints(street,
                                      {points[-2]["node_id"], r["node_id"]})
                 if mids:

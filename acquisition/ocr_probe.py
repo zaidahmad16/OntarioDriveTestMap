@@ -35,6 +35,8 @@ def need(cmd):
     return True
 
 
+# Hardcoded to Walkley, no CLI flag to change it — a Canotek or Smiths
+# Falls video needs this edited by hand or it searches the wrong streets.
 def gazetteer(db, lat=45.376146, lon=-75.647589, r=0.05):
     con = sqlite3.connect(db)
     names = set()

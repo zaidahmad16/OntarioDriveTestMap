@@ -19,6 +19,13 @@ edges it traverses. Finer than a bag of street names (order matters),
 coarser than OSM way ids (works on unsnapped traces too, so partials and
 failures still cluster).
 
+Orphaned: nothing in the pipeline imports or calls this file. The IDF +
+HDBSCAN/linkage-fallback approach was copy-adapted, not shared via import,
+into consensus_geometry.py::families() and validate_consensus.py::
+cluster_traces() — the technique is in production, this script isn't.
+Kept for its component/independence report, useful for investigating a
+clustering result by hand.
+
 Usage:
     python3 cluster_routes.py ../data/out/walkley/reddit_traces.json \\
         ../data/out/walkley/ocr_traces.json --class G2 --centre walkley

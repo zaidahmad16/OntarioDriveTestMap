@@ -45,6 +45,8 @@ def find_video_ids(csv_path):
                     vid = v.strip()
                     break
                 if "url" in kl or "link" in kl:
+                    # YouTube video ids are always 11 characters; this
+                    # covers watch?v=, youtu.be/ and /shorts/ links.
                     m = re.search(r"(?:v=|youtu\.be/|shorts/)([\w-]{11})", v)
                     if m:
                         vid = m.group(1)
@@ -167,7 +169,7 @@ def main():
         for k, v in sorted(errs.items(), key=lambda x: -x[1]):
             print(f"    {k}: {v}")
 
-    json.dump(rows, open(os.path.join(outdir_safe(args.outdir)), "w"), indent=1)
+    json.dump(rows, open(outdir_safe(args.outdir), "w"), indent=1)
     return 0
 
 

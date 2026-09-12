@@ -112,6 +112,7 @@ def clean(raw, gaz):
 
 
 def extract(segments, gaz):
+    """Transcript segments -> turns, deduped across nearby restatements."""
     turns = []
     for s in segments:
         for m in TURN.finditer(s["text"]):
@@ -120,6 +121,9 @@ def extract(segments, gaz):
                 continue
             t = {"direction": m.group(1).lower(), "street": st,
                  "t": round(s["start"], 1)}
+            # narration repeats itself ("turn left, turn left onto Bank")
+            # within a few seconds; a real second turn onto the same
+            # street wouldn't land inside an 8s window
             if turns and turns[-1]["street"] == st and \
                turns[-1]["direction"] == t["direction"] and \
                t["t"] - turns[-1]["t"] < 8:

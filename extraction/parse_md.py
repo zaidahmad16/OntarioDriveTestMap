@@ -2,6 +2,8 @@
 """
 parse_md.py — pull posts and comments out of the saved Reddit pages.
 
+DESTINATION: extraction/parse_md.py
+
 Reads the raw .md pages rather than any derived CSV, because the CSV
 truncated 230 comment bodies and hid a same-author collision that
 invalidated a corroboration count.

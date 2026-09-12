@@ -7,4 +7,9 @@ __pycache__/
 data/
 out/
 geometry/snapped.json
-data/
+.ipynb_checkpoints/
+*.ipynb
+.vscode/
+.idea/
+.DS_Store
+*.log

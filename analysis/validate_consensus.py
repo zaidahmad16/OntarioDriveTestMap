@@ -49,6 +49,8 @@ KNOWN = set()
 
 
 def base(s):
+    # kept in full only if that's already a real street name verbatim;
+    # otherwise suffix-stripped
     full = " ".join(re.sub(r"[^\w\s]", " ", (s or "").lower()).split())
     if full in KNOWN:
         return full
@@ -149,6 +151,10 @@ def evaluate(traces, g, thresh, mode="weighted", seed=None):
             continue
         scored = consensus(rest, g, mode)
         if mode == "random":
+            # keys' pre-shuffle order comes from iterating a set of
+            # segment tuples, which depends on Python's per-process hash
+            # randomization — seed makes the shuffle reproducible within
+            # a run, not across runs.
             keys = list(scored)
             rng.shuffle(keys)
             pred = set(keys[:max(1, int(len(keys) * 0.4))])
