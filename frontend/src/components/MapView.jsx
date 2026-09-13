@@ -12,31 +12,21 @@ const CENTRE_COORDS = {
   winchester: [45.0847, -75.3495],
 };
 
-// Functional distinction between test classes -- not a design choice, a
-// requirement: a user needs to tell G from G2 (and G2 route variants
-// apart) at a glance, since route_lines carry no other visual cue.
-const CLASS_COLORS = {
-  G: "#e6550d",
-  G2: "#3182bd",
-};
-
-// NULL and mixed are different findings and must not look the same:
-// NULL means "validated geometry, no confirmed G/G2 trace behind it"
-// (real route, missing label -- solid, so it doesn't read as "less
-// real" than a classed route). Mixed means "confirmed G and confirmed
-// G2 traces both feed this family" -- dashed, so a genuine class
-// conflict stays visually flagged as different from an absence of
-// data. class_vote() currently never returns mixed=true (see
-// common/classvote.py), so this style has no live example yet -- kept
-// here rather than removed, for whenever real data produces one.
-const UNCLASSED_COLOR = "#888888";
+// Class color-coding (G orange / G2 blue) was dropped by explicit
+// request in favour of one uniform color for all real, sourced route
+// data -- test_class is still filterable (buttons below) and still
+// shown in each line's popup text, just no longer color-coded. Real
+// data (confirmed AND below-threshold) is one solid red; nothing about
+// this touches the one tier that still MUST stay visually separate.
+const REAL_COLOR = "#e41a1c";
 
 // predicted: this is NOT sourced evidence -- it's a road-snapped guess
 // bridging two independently real, same-family points that no single
 // trace ever connected directly (see predict_family_bridges.py). This
 // is the one tier where a real person could drive a turn nobody
 // actually confirmed, so it does not get to share a color with
-// anything confirmed, at any zoom, ever. Bright, unmistakable, and
+// anything confirmed, at any zoom, ever -- this held even when class
+// color-coding for everything else was dropped. Bright, unmistakable,
 // never reused elsewhere on this map.
 const PREDICTED_COLOR = "#984ea3";
 
@@ -48,20 +38,11 @@ function routeLineStyle(feature) {
     return { color: PREDICTED_COLOR, weight: 3, opacity: 0.85, dashArray: "1 8" };
   }
 
-  const color = p.mixed_classes || !p.test_class
-    ? UNCLASSED_COLOR
-    : CLASS_COLORS[p.test_class] || "#31a354";
-
-  // below_threshold: same family, same class vote, real OSRM-snapped
-  // geometry -- just below consensus_geometry.py's publish threshold.
-  // Thinner and semi-transparent so it reads as "real but weaker
-  // evidence," not conflated with a fully-published route (weight 4,
-  // solid) or with mixed/NULL (which are about class UNCERTAINTY, a
-  // different axis from evidence STRENGTH).
-  if (p.below_threshold) {
-    return { color, weight: 2, opacity: 0.6, dashArray: "3 4" };
-  }
-  return { color, weight: 4, dashArray: p.mixed_classes ? "6 4" : null };
+  // Confirmed and below-threshold both real, sourced evidence -- both
+  // solid now, by request. below_threshold is still exposed in the
+  // popup text so the confidence distinction isn't lost, just not
+  // carried in the line style anymore.
+  return { color: REAL_COLOR, weight: 4 };
 }
 
 function pointToLayer(feature, latlng) {
