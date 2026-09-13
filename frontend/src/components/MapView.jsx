@@ -127,14 +127,69 @@ function FitToData({ geojson, centreLatLng }) {
   return null;
 }
 
+// One class, one self-contained map -- no shared filter state, no
+// possibility of one class's lines rendering on top of the other's.
+// Requested explicitly: side-by-side instead of a single map with a
+// toggle, because overlap between G and G2 geometry was confusing even
+// with different styling.
+function RoutePanel({ centreId, geojson, classFilter, center }) {
+  const filtered = {
+    ...geojson,
+    features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
+  };
+  const hasPredicted = filtered.features.some(
+    (f) => f.properties.kind === "route_line" && f.properties.predicted
+  );
+
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <h4 style={{ margin: "0 0 6px" }}>{classFilter} route</h4>
+      {hasPredicted && (
+        <p
+          style={{
+            background: "#f5eaf7",
+            border: "1px solid #984ea3",
+            color: "#5c1f66",
+            padding: "6px 10px",
+            borderRadius: 4,
+            fontSize: "0.85em",
+            marginBottom: 8,
+          }}
+        >
+          <b style={{ color: "#984ea3" }}>⚠ Dotted purple = predicted</b> -- not
+          a confirmed route.
+        </p>
+      )}
+      <MapContainer
+        key={`${centreId}-${classFilter}`} // force a clean remount per centre+class
+        center={center}
+        zoom={13}
+        style={{ height: "600px", width: "100%" }}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+        />
+        <Marker position={center} icon={centreIcon}>
+          <Tooltip permanent direction="top" offset={[0, -12]}>
+            <b>DriveTest Centre</b>
+          </Tooltip>
+        </Marker>
+        <GeoJSON
+          data={filtered}
+          style={routeLineStyle}
+          pointToLayer={pointToLayer}
+          onEachFeature={onEachFeature}
+        />
+        <FitToData geojson={filtered} centreLatLng={center} />
+      </MapContainer>
+    </div>
+  );
+}
+
 export default function MapView({ centreId }) {
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
-  const [classFilter, setClassFilter] = useState("G");
-
-  useEffect(() => {
-    setClassFilter("G"); // don't carry a filter across to a different centre
-  }, [centreId]);
 
   useEffect(() => {
     let stale = false;
@@ -157,76 +212,11 @@ export default function MapView({ centreId }) {
   if (!geojson) return <p>Loading map…</p>;
 
   const center = CENTRE_COORDS[centreId] || [45, -76];
-  const filtered = {
-    ...geojson,
-    features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
-  };
-  const hasPredicted = filtered.features.some(
-    (f) => f.properties.kind === "route_line" && f.properties.predicted
-  );
 
   return (
-    <div>
-      {hasPredicted && (
-        <p
-          style={{
-            background: "#f5eaf7",
-            border: "1px solid #984ea3",
-            color: "#5c1f66",
-            padding: "6px 10px",
-            borderRadius: 4,
-            fontSize: "0.9em",
-            marginBottom: 8,
-          }}
-        >
-          <b style={{ color: "#984ea3" }}>⚠ Dotted purple lines are predicted</b>{" "}
-          -- road-snapped guesses connecting real, confirmed points that no
-          single source actually walked between. Not a confirmed route.
-        </p>
-      )}
-      <div style={{ marginBottom: 8 }}>
-        {["G", "G2"].map((f) => (
-          <button
-            key={f}
-            onClick={() => setClassFilter(f)}
-            style={{
-              marginRight: 6,
-              padding: "4px 10px",
-              fontWeight: classFilter === f ? "bold" : "normal",
-              border: classFilter === f ? "2px solid #333" : "1px solid #ccc",
-              cursor: "pointer",
-            }}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-      <MapContainer
-        key={centreId} // force a clean remount per centre, avoids stale-view bugs
-        center={center}
-        zoom={13}
-        style={{ height: "600px", width: "100%" }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-        <Marker position={center} icon={centreIcon}>
-          <Tooltip permanent direction="top" offset={[0, -12]}>
-            <b>DriveTest Centre</b>
-          </Tooltip>
-        </Marker>
-        <GeoJSON
-          key={classFilter} // react-leaflet's GeoJSON doesn't reliably re-diff
-          // an in-place data swap -- remount on filter change instead, same
-          // reasoning as the MapContainer's own centreId key above.
-          data={filtered}
-          style={routeLineStyle}
-          pointToLayer={pointToLayer}
-          onEachFeature={onEachFeature}
-        />
-        <FitToData geojson={filtered} centreLatLng={center} />
-      </MapContainer>
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+      <RoutePanel centreId={centreId} geojson={geojson} classFilter="G" center={center} />
+      <RoutePanel centreId={centreId} geojson={geojson} classFilter="G2" center={center} />
     </div>
   );
 }
