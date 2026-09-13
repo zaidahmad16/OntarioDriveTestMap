@@ -273,14 +273,15 @@ def main():
                         INSERT INTO route_lines
                             (centre_id, family, run, trace_count, authors,
                              distance_m, geometry, test_class, mixed_classes,
-                             below_threshold, predicted)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             below_threshold, predicted, source)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             centre_id, fid, run, len(traces), authors,
                             round(real_dist) if real_dist else round(dist),
                             json.dumps(geom["coordinates"]),
                             test_class, mixed_classes, False, True,
+                            "predict_family_bridges",
                         ),
                     )
 

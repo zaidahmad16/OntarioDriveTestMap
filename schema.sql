@@ -65,7 +65,8 @@ CREATE TABLE route_lines (
     test_class TEXT,
     mixed_classes BOOLEAN NOT NULL DEFAULT false,
     below_threshold BOOLEAN NOT NULL DEFAULT false,
-    predicted BOOLEAN NOT NULL DEFAULT false
+    predicted BOOLEAN NOT NULL DEFAULT false,
+    source TEXT NOT NULL DEFAULT 'consensus_geometry'
 );
 
 CREATE TABLE route_line_segments (

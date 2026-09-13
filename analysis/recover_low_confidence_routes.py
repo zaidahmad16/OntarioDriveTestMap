@@ -157,13 +157,14 @@ def main():
                         INSERT INTO route_lines
                             (centre_id, family, run, trace_count, authors,
                              distance_m, geometry, test_class, mixed_classes,
-                             below_threshold)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             below_threshold, source)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             centre_id, fid, p["run"], p["traces"], p["authors"],
                             p["distance_m"], json.dumps(feat["geometry"]["coordinates"]),
                             test_class, mixed_classes, True,
+                            "recover_low_confidence_routes",
                         ),
                     )
 
