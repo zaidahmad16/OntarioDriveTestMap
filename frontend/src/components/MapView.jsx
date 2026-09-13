@@ -34,13 +34,20 @@ const UNCLASSED_COLOR = "#888888";
 function routeLineStyle(feature) {
   const p = feature.properties;
   if (p.kind !== "route_line") return {};
-  if (p.mixed_classes) {
-    return { color: UNCLASSED_COLOR, weight: 4, dashArray: "6 4" };
+  const color = p.mixed_classes || !p.test_class
+    ? UNCLASSED_COLOR
+    : CLASS_COLORS[p.test_class] || "#31a354";
+
+  // below_threshold: same family, same class vote, real OSRM-snapped
+  // geometry -- just below consensus_geometry.py's publish threshold.
+  // Thinner and semi-transparent so it reads as "real but weaker
+  // evidence," not conflated with a fully-published route (weight 4,
+  // solid) or with mixed/NULL (which are about class UNCERTAINTY, a
+  // different axis from evidence STRENGTH).
+  if (p.below_threshold) {
+    return { color, weight: 2, opacity: 0.6, dashArray: "3 4" };
   }
-  if (!p.test_class) {
-    return { color: UNCLASSED_COLOR, weight: 4, dashArray: null };
-  }
-  return { color: CLASS_COLORS[p.test_class] || "#31a354", weight: 4, dashArray: null };
+  return { color, weight: 4, dashArray: p.mixed_classes ? "6 4" : null };
 }
 
 function pointToLayer(feature, latlng) {
@@ -67,10 +74,14 @@ function onEachFeature(feature, layer) {
     const classLabel = p.mixed_classes
       ? `${p.test_class || "class unknown"} (mixed -- traces disagree)`
       : p.test_class || "class unknown";
+    const confidenceNote = p.below_threshold
+      ? "<br/><i>Below the standard confidence threshold -- real, same-family " +
+        "evidence, just weaker corroboration than a fully published route.</i>"
+      : "";
     layer.bindPopup(
       `<b>${classLabel} route -- family ${p.family}</b><br/>` +
         `${p.trace_count} traces, ${p.authors} authors<br/>` +
-        `${p.distance_m}m`
+        `${p.distance_m}m${confidenceNote}`
     );
   }
 }

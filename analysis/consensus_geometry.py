@@ -247,6 +247,61 @@ def order_walk(seg, keep):
     return runs
 
 
+def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
+                        mixed_classes, args, below_threshold=False):
+    """One run (ordered list of segment keys, all from the SAME family)
+    -> one GeoJSON Feature, road-snapped via OSRM. Shared by the main
+    per-family loop and recover_low_confidence_routes.py, which walks
+    the same family's below-threshold segments separately -- one
+    implementation of "segments -> drawable route", not two, same
+    reasoning as common/classvote.py. Returns None for a run too short
+    to draw (a single segment is one point, not a line)."""
+    pts, props = [], []
+    for k in run:
+        v = seg[k]
+        n = v["node"]
+        pts.append({"lat": n["lat"], "lon": n["lon"]})
+        props.append({
+            "streets": list(k),
+            "authors": len(v["video"] | v["text"]),
+            "video": len(v["video"]), "text": len(v["text"]),
+            "weight": round(sum(v["w"].values()), 2),
+            "junction": n["kind"], "last_seen": v["last"],
+        })
+    if len(pts) < 2:
+        return None
+
+    geom, dist = None, None
+    if not args.dry_run:
+        try:
+            r = osrm_route(pts, args.pause)
+            if r.get("code") == "Ok":
+                geom = r["routes"][0]["geometry"]
+                dist = r["routes"][0]["distance"]
+            else:
+                print(f"     run {ri}: OSRM {r.get('code')}")
+        except Exception as e:
+            print(f"     run {ri}: {str(e)[:80]}")
+    if geom is None:
+        geom = {"type": "LineString",
+                "coordinates": [[p["lon"], p["lat"]] for p in pts]}
+
+    return {
+        "type": "Feature",
+        "geometry": geom,
+        "properties": {
+            "family": fid, "run": ri,
+            "traces": len(traces), "authors": authors,
+            "test_class": test_class, "mixed_classes": mixed_classes,
+            "below_threshold": below_threshold,
+            "distance_m": round(dist) if dist else None,
+            "segments": props,
+            "min_authors": min(p["authors"] for p in props),
+            "max_authors": max(p["authors"] for p in props),
+        },
+    }
+
+
 def osrm_route(points, pause=1.0):
     coords = ";".join(f"{p['lon']},{p['lat']}" for p in points)
     q = urllib.parse.urlencode({"overview": "full", "geometries": "geojson",
@@ -351,50 +406,11 @@ def main():
             print(f"     {dropped} below threshold {args.threshold}")
 
         for ri, run in enumerate(runs):
-            pts, props = [], []
-            for k in run:
-                v = seg[k]
-                n = v["node"]
-                pts.append({"lat": n["lat"], "lon": n["lon"]})
-                props.append({
-                    "streets": list(k),
-                    "authors": len(v["video"] | v["text"]),
-                    "video": len(v["video"]), "text": len(v["text"]),
-                    "weight": round(sum(v["w"].values()), 2),
-                    "junction": n["kind"], "last_seen": v["last"],
-                })
-            if len(pts) < 2:
-                continue
-
-            geom = None
-            if not args.dry_run:
-                try:
-                    r = osrm_route(pts, args.pause)
-                    if r.get("code") == "Ok":
-                        geom = r["routes"][0]["geometry"]
-                        dist = r["routes"][0]["distance"]
-                    else:
-                        print(f"     run {ri}: OSRM {r.get('code')}")
-                except Exception as e:
-                    print(f"     run {ri}: {str(e)[:80]}")
-            if geom is None:
-                geom = {"type": "LineString",
-                        "coordinates": [[p["lon"], p["lat"]] for p in pts]}
-                dist = None
-
-            feats.append({
-                "type": "Feature",
-                "geometry": geom,
-                "properties": {
-                    "family": fid, "run": ri,
-                    "traces": len(traces), "authors": authors,
-                    "test_class": test_class, "mixed_classes": mixed_classes,
-                    "distance_m": round(dist) if dist else None,
-                    "segments": props,
-                    "min_authors": min(p["authors"] for p in props),
-                    "max_authors": max(p["authors"] for p in props),
-                },
-            })
+            feat = build_route_feature(seg, run, ri, fid, traces, authors,
+                                       test_class, mixed_classes, args,
+                                       below_threshold=False)
+            if feat:
+                feats.append(feat)
         print()
 
     if args.check_drive_past:
