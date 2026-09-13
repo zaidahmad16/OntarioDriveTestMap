@@ -59,6 +59,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "common"))
 from streetnames import load_known, key, variants as name_variants
+from classvote import class_vote
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import drive_past
@@ -320,6 +321,9 @@ def main():
         seg = support(traces, g)
         authors = len({t.get("author_hash") or t["source_id"] for t in traces})
 
+        test_class, mixed_classes, class_counts = class_vote(
+            t.get("test_class") for t in traces)
+
         keep, dropped, corrected = [], 0, 0
         for k, v in seg.items():
             if k in overrides:
@@ -336,6 +340,11 @@ def main():
         print(f"── family {fid}: {len(traces)} traces, {authors} authors, "
               f"{len(keep)} segments, {len(runs)} run(s)")
         print(f"     {', '.join(streets[:9])}")
+        if mixed_classes:
+            counts_str = ", ".join(f"{k}={v}" for k, v in sorted(class_counts.items()))
+            print(f"     ! mixed test_class among family {fid}'s traces "
+                  f"({counts_str}) -- publishing dominant class {test_class!r}, "
+                  f"data-quality issue, not silently resolved")
         if corrected:
             print(f"     {corrected} segment(s) removed by correction")
         if dropped:
@@ -379,6 +388,7 @@ def main():
                 "properties": {
                     "family": fid, "run": ri,
                     "traces": len(traces), "authors": authors,
+                    "test_class": test_class, "mixed_classes": mixed_classes,
                     "distance_m": round(dist) if dist else None,
                     "segments": props,
                     "min_authors": min(p["authors"] for p in props),
