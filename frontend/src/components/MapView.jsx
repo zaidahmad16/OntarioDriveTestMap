@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api.js";
 
@@ -86,9 +86,40 @@ function onEachFeature(feature, layer) {
   }
 }
 
+// Route lines only -- consensus_segments (the dots) carry no test_class
+// at all, so a class filter has nothing to say about them one way or
+// the other. They stay visible regardless of which button is active.
+function matchesFilter(feature, filter) {
+  if (feature.properties.kind !== "route_line") return true;
+  if (filter === "all") return true;
+  return feature.properties.test_class === filter;
+}
+
+// Frames the view on whatever real geometry actually exists for this
+// centre, instead of a hardcoded guess-coordinate at a fixed zoom.
+// Real routes read as "finished" when the map opens already looking at
+// them, not when a user has to pan/zoom to find a thin line somewhere
+// in a wide default view.
+function FitToData({ geojson }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!geojson || !geojson.features.length) return;
+    const bounds = L.geoJSON(geojson).getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+  }, [geojson, map]);
+  return null;
+}
+
 export default function MapView({ centreId }) {
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
+  const [classFilter, setClassFilter] = useState("all");
+
+  useEffect(() => {
+    setClassFilter("all"); // don't carry a filter across to a different centre
+  }, [centreId]);
 
   useEffect(() => {
     let stale = false;
@@ -111,24 +142,51 @@ export default function MapView({ centreId }) {
   if (!geojson) return <p>Loading map…</p>;
 
   const center = CENTRE_COORDS[centreId] || [45, -76];
+  const filtered = {
+    ...geojson,
+    features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
+  };
 
   return (
-    <MapContainer
-      key={centreId} // force a clean remount per centre, avoids stale-view bugs
-      center={center}
-      zoom={13}
-      style={{ height: "600px", width: "100%" }}
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution="&copy; OpenStreetMap contributors"
-      />
-      <GeoJSON
-        data={geojson}
-        style={routeLineStyle}
-        pointToLayer={pointToLayer}
-        onEachFeature={onEachFeature}
-      />
-    </MapContainer>
+    <div>
+      <div style={{ marginBottom: 8 }}>
+        {["all", "G", "G2"].map((f) => (
+          <button
+            key={f}
+            onClick={() => setClassFilter(f)}
+            style={{
+              marginRight: 6,
+              padding: "4px 10px",
+              fontWeight: classFilter === f ? "bold" : "normal",
+              border: classFilter === f ? "2px solid #333" : "1px solid #ccc",
+              cursor: "pointer",
+            }}
+          >
+            {f === "all" ? "All routes" : f}
+          </button>
+        ))}
+      </div>
+      <MapContainer
+        key={centreId} // force a clean remount per centre, avoids stale-view bugs
+        center={center}
+        zoom={13}
+        style={{ height: "600px", width: "100%" }}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+        />
+        <GeoJSON
+          key={classFilter} // react-leaflet's GeoJSON doesn't reliably re-diff
+          // an in-place data swap -- remount on filter change instead, same
+          // reasoning as the MapContainer's own centreId key above.
+          data={filtered}
+          style={routeLineStyle}
+          pointToLayer={pointToLayer}
+          onEachFeature={onEachFeature}
+        />
+        <FitToData geojson={filtered} />
+      </MapContainer>
+    </div>
   );
 }
