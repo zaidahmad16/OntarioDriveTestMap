@@ -1,16 +1,27 @@
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, Marker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api.js";
 
-// Rough starting coordinates per centre, just to point the map somewhere
-// sensible before the real geometry loads and Leaflet can fit to it.
+// Real DriveTest centre coordinates, from osm.db's centres table (the
+// OSM way for the actual DriveTest building/lot) -- not an approximate
+// guess. Every route starts and ends here; a user needs to find this
+// point on the map before anything else makes sense.
 const CENTRE_COORDS = {
-  walkley: [45.3761, -75.6476],
-  canotek: [45.4497, -75.5744],
-  smithsfalls: [44.8828, -76.0151],
-  winchester: [45.0847, -75.3495],
+  walkley: [45.376145807017544, -75.64758859649123],
+  canotek: [45.4528876, -75.5883806],
+  smithsfalls: [44.8827581, -76.0150536],
+  winchester: [45.0851023, -75.3712133],
 };
+
+const centreIcon = L.divIcon({
+  className: "",
+  html:
+    '<div style="width:22px;height:22px;border-radius:50%;background:#111;' +
+    'border:4px solid #ffd400;box-shadow:0 0 0 2px #111,0 1px 6px rgba(0,0,0,.6);"></div>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
 
 // Class color-coding (G orange / G2 blue) was dropped by explicit
 // request in favour of one uniform color for all real, sourced route
@@ -95,7 +106,6 @@ function onEachFeature(feature, layer) {
 // the other. They stay visible regardless of which button is active.
 function matchesFilter(feature, filter) {
   if (feature.properties.kind !== "route_line") return true;
-  if (filter === "all") return true;
   return feature.properties.test_class === filter;
 }
 
@@ -104,25 +114,26 @@ function matchesFilter(feature, filter) {
 // Real routes read as "finished" when the map opens already looking at
 // them, not when a user has to pan/zoom to find a thin line somewhere
 // in a wide default view.
-function FitToData({ geojson }) {
+function FitToData({ geojson, centreLatLng }) {
   const map = useMap();
   useEffect(() => {
     if (!geojson || !geojson.features.length) return;
     const bounds = L.geoJSON(geojson).getBounds();
+    if (centreLatLng) bounds.extend(centreLatLng); // never crop the centre out of view
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [30, 30] });
     }
-  }, [geojson, map]);
+  }, [geojson, centreLatLng, map]);
   return null;
 }
 
 export default function MapView({ centreId }) {
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
-  const [classFilter, setClassFilter] = useState("all");
+  const [classFilter, setClassFilter] = useState("G");
 
   useEffect(() => {
-    setClassFilter("all"); // don't carry a filter across to a different centre
+    setClassFilter("G"); // don't carry a filter across to a different centre
   }, [centreId]);
 
   useEffect(() => {
@@ -174,7 +185,7 @@ export default function MapView({ centreId }) {
         </p>
       )}
       <div style={{ marginBottom: 8 }}>
-        {["all", "G", "G2"].map((f) => (
+        {["G", "G2"].map((f) => (
           <button
             key={f}
             onClick={() => setClassFilter(f)}
@@ -186,7 +197,7 @@ export default function MapView({ centreId }) {
               cursor: "pointer",
             }}
           >
-            {f === "all" ? "All routes" : f}
+            {f}
           </button>
         ))}
       </div>
@@ -200,6 +211,11 @@ export default function MapView({ centreId }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
+        <Marker position={center} icon={centreIcon}>
+          <Tooltip permanent direction="top" offset={[0, -12]}>
+            <b>DriveTest Centre</b>
+          </Tooltip>
+        </Marker>
         <GeoJSON
           key={classFilter} // react-leaflet's GeoJSON doesn't reliably re-diff
           // an in-place data swap -- remount on filter change instead, same
@@ -209,7 +225,7 @@ export default function MapView({ centreId }) {
           pointToLayer={pointToLayer}
           onEachFeature={onEachFeature}
         />
-        <FitToData geojson={filtered} />
+        <FitToData geojson={filtered} centreLatLng={center} />
       </MapContainer>
     </div>
   );
