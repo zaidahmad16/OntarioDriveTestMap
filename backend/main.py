@@ -132,7 +132,7 @@ def get_map(centre_id: str, user=Depends(require_user)):
     features = []
     for line in lines:
         steps = query(
-            "SELECT instruction, distance_m, duration_s "
+            "SELECT instruction, distance_m, duration_s, traffic_control, speed_limit "
             "FROM route_line_steps WHERE route_line_id = %s ORDER BY step_order",
             (line["id"],),
         )

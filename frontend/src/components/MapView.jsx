@@ -141,6 +141,21 @@ function formatDuration(s) {
   return `${mins} min`;
 }
 
+// Real OSM tags (extract_traffic_data.py) -- absent for most segments
+// simply because most streets in this extract aren't tagged with
+// either (checked directly: ~4.7% of ways have a maxspeed at all).
+// Blank cell means "not tagged," never a guessed default.
+function formatTrafficControl(kind) {
+  if (kind === "traffic_signals") return "Traffic light";
+  if (kind === "stop") return "Stop sign";
+  return "";
+}
+
+function formatSpeedLimit(v) {
+  if (!v) return "";
+  return /^\d+$/.test(v) ? `${v} km/h` : v; // plain number = km/h in this region; "45 mph" etc. kept as-is
+}
+
 // Turn-by-turn table, concatenated across every route_line in the
 // current class -- one running numbered list, in family/run order (the
 // API already sorts that way). Each row's instruction/distance/duration
@@ -172,7 +187,9 @@ function InstructionsTable({ lines }) {
         Distances and durations are calculated by routing software between
         the collected data points, not measured from a live drive.{" "}
         <span style={{ background: "#f5eaf7", padding: "0 3px" }}>Shaded rows</span>{" "}
-        are predicted (see banner above), not sourced from a trace.
+        are predicted (see banner above), not sourced from a trace. Junction
+        and speed limit data is real OSM tagging where available -- blank
+        means untagged in OpenStreetMap, not "none."
       </p>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
         <thead>
@@ -181,6 +198,8 @@ function InstructionsTable({ lines }) {
             <th style={{ padding: "4px 8px" }}>Instruction</th>
             <th style={{ padding: "4px 8px" }}>Distance</th>
             <th style={{ padding: "4px 8px" }}>Duration</th>
+            <th style={{ padding: "4px 8px" }}>At junction</th>
+            <th style={{ padding: "4px 8px" }}>Speed limit</th>
           </tr>
         </thead>
         <tbody>
@@ -196,6 +215,8 @@ function InstructionsTable({ lines }) {
               <td style={{ padding: "4px 8px" }}>{r.instruction}</td>
               <td style={{ padding: "4px 8px" }}>{formatDistance(r.distance_m)}</td>
               <td style={{ padding: "4px 8px" }}>{formatDuration(r.duration_s)}</td>
+              <td style={{ padding: "4px 8px" }}>{formatTrafficControl(r.traffic_control)}</td>
+              <td style={{ padding: "4px 8px" }}>{formatSpeedLimit(r.speed_limit)}</td>
             </tr>
           ))}
         </tbody>

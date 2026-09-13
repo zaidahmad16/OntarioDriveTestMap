@@ -89,7 +89,9 @@ CREATE TABLE route_line_steps (
     step_order INTEGER NOT NULL,
     instruction TEXT NOT NULL,
     distance_m INTEGER,
-    duration_s INTEGER
+    duration_s INTEGER,
+    traffic_control TEXT,
+    speed_limit TEXT
 );
 
 CREATE INDEX idx_traces_centre ON traces(centre_id);

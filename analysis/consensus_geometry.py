@@ -68,6 +68,12 @@ OSRM = "https://router.project-osrm.org/route/v1/driving"
 UA = "OntarioRoadTestMap/0.1 (research; ontariodrivetestmap.fyi)"
 
 
+def haversine(a, b):
+    la1, lo1, la2, lo2 = map(math.radians, [a[0], a[1], b[0], b[1]])
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 2 * 6371000 * math.asin(math.sqrt(h))
+
+
 class Graph:
     def __init__(self, db):
         self.con = sqlite3.connect(db)
@@ -96,6 +102,46 @@ class Graph:
         r = self.con.execute(
             "SELECT lat, lon, name FROM centres LIMIT 1").fetchone()
         return dict(r) if r else None
+
+    def nearby_traffic_control(self, lat, lon, radius_m=20):
+        """Real stop sign / traffic signal within radius_m of a point,
+        or None. Table populated by geometry/extract_traffic_data.py --
+        absent entirely until that script has been run once."""
+        try:
+            deg = radius_m / 111_000
+            rows = self.con.execute(
+                "SELECT lat, lon, kind FROM traffic_control "
+                "WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+                (lat - deg, lat + deg, lon - deg, lon + deg),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return None  # table doesn't exist yet -- not run, not a crash
+        best = None
+        for r in rows:
+            d = haversine((lat, lon), (r["lat"], r["lon"]))
+            if d <= radius_m and (best is None or d < best[0]):
+                best = (d, r["kind"])
+        return best[1] if best else None
+
+    def street_maxspeed(self, name):
+        """Real posted speed limit for a named street, or None -- most
+        streets in this extract simply aren't tagged (~4.7% of ways
+        checked directly against the Ottawa extract), so None is the
+        common, honest case, not a bug."""
+        if not name:
+            return None
+        try:
+            for v in name_variants(name):
+                r = self.con.execute(
+                    "SELECT wm.maxspeed FROM streets s "
+                    "JOIN way_maxspeed wm ON wm.way_id = s.way_id "
+                    "WHERE s.base = ? OR s.full = ? LIMIT 1", (v, v),
+                ).fetchone()
+                if r:
+                    return r["maxspeed"]
+        except sqlite3.OperationalError:
+            return None
+        return None
 
 
 def age_weight(observed, hl=5.0):
@@ -248,7 +294,7 @@ def order_walk(seg, keep):
 
 
 def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
-                        mixed_classes, args, below_threshold=False):
+                        mixed_classes, args, below_threshold=False, g=None):
     """One run (ordered list of segment keys, all from the SAME family)
     -> one GeoJSON Feature, road-snapped via OSRM. Shared by the main
     per-family loop and recover_low_confidence_routes.py, which walks
@@ -278,7 +324,7 @@ def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
             if r.get("code") == "Ok":
                 geom = r["routes"][0]["geometry"]
                 dist = r["routes"][0]["distance"]
-                steps = extract_steps(r)
+                steps = extract_steps(r, g)
             else:
                 print(f"     run {ri}: OSRM {r.get('code')}")
         except Exception as e:
@@ -365,19 +411,27 @@ def insert_steps(cur, route_line_id, steps):
         cur.execute(
             """
             INSERT INTO route_line_steps
-                (route_line_id, step_order, instruction, distance_m, duration_s)
-            VALUES (%s, %s, %s, %s, %s)
+                (route_line_id, step_order, instruction, distance_m, duration_s,
+                 traffic_control, speed_limit)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (route_line_id, i, s["instruction"], s["distance_m"], s["duration_s"]),
+            (route_line_id, i, s["instruction"], s["distance_m"], s["duration_s"],
+             s.get("traffic_control"), s.get("speed_limit")),
         )
 
 
-def extract_steps(osrm_response):
+def extract_steps(osrm_response, g=None):
     """OSRM's own leg/step breakdown for a route already fetched with
     steps=true -> a flat, ordered list of {instruction, distance_m,
     duration_s}. Returns [] if the response has no step data (e.g. a
     dry run's synthetic straight-line geometry, which never calls
     OSRM).
+
+    Pass g (a Graph, see extract_traffic_data.py for what populates its
+    tables) to enrich each instruction with a real stop sign / traffic
+    signal at that maneuver's location and the real posted speed limit
+    for that street, when the OSM extract actually has that tag --
+    silently omitted otherwise, never guessed.
 
     Two OSRM behaviours get corrected here, not just formatted:
 
@@ -412,18 +466,22 @@ def extract_steps(osrm_response):
                 # a mid-route junction, not the real start -- describe it
                 # as the turn it actually is, not a fresh "head onto"
                 name = step.get("name") or "the road"
+                loc = m.get("location") or [None, None]
                 flat.append({
                     "instruction": f"Continue onto {name}",
                     "distance_m": round(step.get("distance", 0)),
                     "duration_s": round(step.get("duration", 0)),
                     "_name": name,
+                    "_lon": loc[0], "_lat": loc[1],
                 })
                 continue
+            loc = m.get("location") or [None, None]
             flat.append({
                 "instruction": step_instruction(step),
                 "distance_m": round(step.get("distance", 0)),
                 "duration_s": round(step.get("duration", 0)),
                 "_name": step.get("name") or "",
+                "_lon": loc[0], "_lat": loc[1],
             })
 
     out, current = [], None
@@ -442,8 +500,15 @@ def extract_steps(osrm_response):
         current = row
     if current is not None:
         out.append(current)
+
     for row in out:
-        del row["_name"]
+        if g is not None and row["_lat"] is not None:
+            row["traffic_control"] = g.nearby_traffic_control(row["_lat"], row["_lon"])
+            row["speed_limit"] = g.street_maxspeed(row["_name"])
+        else:
+            row["traffic_control"] = None
+            row["speed_limit"] = None
+        del row["_name"], row["_lat"], row["_lon"]
     return out
 
 
@@ -541,7 +606,7 @@ def main():
         for ri, run in enumerate(runs):
             feat = build_route_feature(seg, run, ri, fid, traces, authors,
                                        test_class, mixed_classes, args,
-                                       below_threshold=False)
+                                       below_threshold=False, g=g)
             if feat:
                 feats.append(feat)
         print()

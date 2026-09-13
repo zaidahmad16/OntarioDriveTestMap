@@ -195,7 +195,7 @@ def main():
                         if r.get("code") == "Ok":
                             geom = r["routes"][0]["geometry"]
                             dist = r["routes"][0]["distance"]
-                            steps = cg.extract_steps(r)
+                            steps = cg.extract_steps(r, g)
                     except Exception as e:
                         print(f"     centre-link {i}: {str(e)[:80]}")
                 if geom is None:

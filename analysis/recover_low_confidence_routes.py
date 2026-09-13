@@ -141,7 +141,7 @@ def main():
             for i, run in enumerate(extra_runs):
                 feat = cg.build_route_feature(
                     seg, run, run_start + i, fid, traces, authors,
-                    test_class, mixed_classes, args, below_threshold=True)
+                    test_class, mixed_classes, args, below_threshold=True, g=g)
                 if not feat:
                     continue
                 p = feat["properties"]
