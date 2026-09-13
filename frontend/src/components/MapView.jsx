@@ -136,9 +136,19 @@ function formatDistance(m) {
 
 function formatDuration(s) {
   if (s == null) return "";
-  if (s === 0) return "0 min";
-  const mins = Math.max(1, Math.round(s / 60));
-  return `${mins} min`;
+  // Flooring every nonzero duration up to "1 min" looked fine per row
+  // but silently added ~20 minutes of pure rounding error once a route
+  // has 30+ short connector segments (a 5-second turn showing "1 min"
+  // 30 times over). Show real seconds under a minute instead.
+  if (s < 60) return `${Math.round(s)} s`;
+  return `${Math.round(s / 60)} min`;
+}
+
+function sumDuration(rows) {
+  const totalSec = rows.reduce((a, r) => a + (r.duration_s || 0), 0);
+  const mins = Math.floor(totalSec / 60);
+  const secs = Math.round(totalSec % 60);
+  return mins > 0 ? `${mins} min ${secs} s` : `${secs} s`;
 }
 
 // Real OSM tags (extract_traffic_data.py) -- absent for most segments
@@ -180,9 +190,15 @@ function InstructionsTable({ lines }) {
   // every earlier one is dropped (the next row already picks up the
   // route where this one left off, same as within a single OSRM leg).
   rows = rows.filter((r, i) => r.instruction !== "Arrive at destination" || i === rows.length - 1);
+  const totalDistanceM = rows.reduce((a, r) => a + (r.distance_m || 0), 0);
 
   return (
     <div style={{ marginTop: 12 }}>
+      <p style={{ fontSize: "0.9em", marginBottom: 4 }}>
+        <b>Total: {formatDistance(totalDistanceM)}, {sumDuration(rows)}</b> -- the real
+        sum, not each row's rounded display added up (rounding every short turn up to
+        "1 min" made the total look much longer than it is).
+      </p>
       <p style={{ fontSize: "0.85em", color: "#555", marginBottom: 6 }}>
         Distances and durations are calculated by routing software between
         the collected data points, not measured from a live drive.{" "}
