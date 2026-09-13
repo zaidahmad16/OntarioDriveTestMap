@@ -92,31 +92,43 @@ def load_traces(centre_id, g):
     return T
 
 
-def connected_components(seg_keys):
-    """Union-find over segment keys by shared street name."""
-    parent = {}
+def drawn_components(seg, threshold):
+    """What's ACTUALLY visible right now, as groups -- not just what's
+    topologically related by shared street name.
 
-    def find(x):
-        while parent.get(x, x) != x:
-            x = parent.get(x, x)
-        return x
+    A segment sharing a street name with another is not automatically
+    connected on the map: order_walk()'s greedy walk only follows one
+    unvisited edge at a time, so a real branch off the main spine is
+    correctly emitted as its own separate run (by design -- see
+    order_walk's own docstring), and a run of exactly ONE edge can never
+    become a line at all (a LineString needs 2+ points; one edge
+    contributes exactly one junction coordinate). That case was being
+    silently dropped everywhere in this pipeline, including the
+    original, most-trusted consensus_geometry.py output -- a fully
+    confirmed, above-threshold single-edge branch was just as invisible
+    as an uncorroborated one. This finds every such gap, from BOTH the
+    official (keep) and below-threshold tiers together, so every real
+    segment either ends up in a drawn run or is correctly identified as
+    needing a bridge -- nothing is silently missing.
+    """
+    keep = [k for k, v in seg.items() if sum(v["w"].values()) >= threshold]
+    below = [k for k, v in seg.items() if sum(v["w"].values()) < threshold]
 
-    def union(a, b):
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[ra] = rb
+    drawn_groups = []
+    covered = set()
+    for edge_set in (keep, below):
+        for run in cg.order_walk(seg, edge_set):
+            if len(run) >= 2:
+                drawn_groups.append(list(run))
+                covered.update(run)
 
-    for k in seg_keys:
-        a, b = k
-        parent.setdefault(a, a)
-        parent.setdefault(b, b)
-        union(a, b)
+    # every real segment not part of any drawn run is its own singleton
+    # "component" -- the only way it can ever become visible is a bridge.
+    for k in seg:
+        if k not in covered:
+            drawn_groups.append([k])
 
-    from collections import defaultdict
-    comps = defaultdict(list)
-    for k in seg_keys:
-        comps[find(k[0])].append(k)
-    return list(comps.values())
+    return drawn_groups
 
 
 def nearest_pair(seg, comp_a, comp_b):
@@ -172,6 +184,10 @@ def main():
     ap.add_argument("--db", default=os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "data", "osm.db"))
     ap.add_argument("--min-family", type=int, default=3)
+    ap.add_argument("--threshold", type=float, default=0.5,
+                     help="must match the threshold used elsewhere -- this "
+                          "is the line between 'official' and 'below "
+                          "threshold', not this script's concern to redefine")
     ap.add_argument("--max-bridge-m", type=float, default=1500.0,
                      help="refuse to bridge two components farther apart "
                           "than this -- see module docstring, rule 3")
@@ -204,7 +220,7 @@ def main():
             test_class, mixed_classes, _ = cg.class_vote(
                 t.get("test_class") for t in traces)
 
-            components = connected_components(list(seg.keys()))
+            components = drawn_components(seg, args.threshold)
             if len(components) <= 1:
                 continue
 
