@@ -147,7 +147,7 @@ function formatDuration(s) {
 // comes straight from OSRM's own step breakdown for that line's real,
 // already-stored geometry -- not re-derived or guessed here.
 function InstructionsTable({ lines }) {
-  const rows = [];
+  let rows = [];
   for (const line of lines) {
     const p = line.properties;
     for (const step of p.steps || []) {
@@ -156,11 +156,23 @@ function InstructionsTable({ lines }) {
   }
   if (!rows.length) return null;
 
+  // Each route_line is its own separate OSRM call with its own real
+  // "arrive at destination" -- correct for that one line in isolation,
+  // but concatenating ~10+ of them into one continuous trip means that
+  // phrase showed up a dozen times, which reads as "you've completed
+  // the whole route" every time, not "this particular leg ended here."
+  // Only the true final row of the WHOLE concatenated trip keeps it;
+  // every earlier one is dropped (the next row already picks up the
+  // route where this one left off, same as within a single OSRM leg).
+  rows = rows.filter((r, i) => r.instruction !== "Arrive at destination" || i === rows.length - 1);
+
   return (
     <div style={{ marginTop: 12 }}>
       <p style={{ fontSize: "0.85em", color: "#555", marginBottom: 6 }}>
         Distances and durations are calculated by routing software between
-        the collected data points, not measured from a live drive.
+        the collected data points, not measured from a live drive.{" "}
+        <span style={{ background: "#f5eaf7", padding: "0 3px" }}>Shaded rows</span>{" "}
+        are predicted (see banner above), not sourced from a trace.
       </p>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
         <thead>
@@ -176,17 +188,12 @@ function InstructionsTable({ lines }) {
             <tr
               key={i}
               style={{
-                background: i % 2 ? "#f7f7f7" : "white",
+                background: r.predicted ? "#f5eaf7" : i % 2 ? "#f7f7f7" : "white",
                 borderBottom: "1px solid #eee",
               }}
             >
               <td style={{ padding: "4px 8px" }}>{i + 1}</td>
-              <td style={{ padding: "4px 8px" }}>
-                {r.instruction}
-                {r.predicted && (
-                  <span style={{ color: "#984ea3", fontWeight: "bold" }}> (predicted)</span>
-                )}
-              </td>
+              <td style={{ padding: "4px 8px" }}>{r.instruction}</td>
               <td style={{ padding: "4px 8px" }}>{formatDistance(r.distance_m)}</td>
               <td style={{ padding: "4px 8px" }}>{formatDuration(r.duration_s)}</td>
             </tr>
