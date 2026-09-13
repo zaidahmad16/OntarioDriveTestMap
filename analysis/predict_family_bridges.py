@@ -35,7 +35,14 @@ Safety rules, all enforced in code below, not just described here:
      family's disconnected components) -- predicts exactly enough real
      road connections to make the family's own evidence into one shape,
      nothing extra.
-  3. Distance-capped (default 1500m): refuses to bridge two points
+  3. Distance-capped (default 2500m -- raised from an initial 1500m
+     after the project owner reviewed a specific real case: Canotek
+     family 4's `blair x ogilvie` is real, trusted evidence (3 traces)
+     but sits ~2.2km from the rest of its own family's cluster. Checked
+     the full impact before raising it: going to 2500m adds exactly
+     that one bridge and changes nothing else anywhere, in either
+     centre -- not a blanket loosening, a specific approved exception
+     that happened to want a round-number cap): refuses to bridge two points
      further apart than a single test-route gap plausibly spans. A
      component pair with no candidate under the cap is left unbridged
      and reported, not forced.
@@ -188,7 +195,7 @@ def main():
                      help="must match the threshold used elsewhere -- this "
                           "is the line between 'official' and 'below "
                           "threshold', not this script's concern to redefine")
-    ap.add_argument("--max-bridge-m", type=float, default=1500.0,
+    ap.add_argument("--max-bridge-m", type=float, default=2500.0,
                      help="refuse to bridge two components farther apart "
                           "than this -- see module docstring, rule 3")
     ap.add_argument("--pause", type=float, default=1.0)
