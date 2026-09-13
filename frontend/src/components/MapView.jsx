@@ -33,26 +33,18 @@ const REAL_COLOR = "#e41a1c";
 
 // predicted: this is NOT sourced evidence -- it's a road-snapped guess
 // bridging two independently real, same-family points that no single
-// trace ever connected directly (see predict_family_bridges.py). This
-// is the one tier where a real person could drive a turn nobody
-// actually confirmed, so it does not get to share a color with
-// anything confirmed, at any zoom, ever -- this held even when class
-// color-coding for everything else was dropped. Bright, unmistakable,
-// never reused elsewhere on this map.
+// trace ever connected directly (see predict_family_bridges.py). Line
+// color/weight now matches confirmed data exactly, by request -- the
+// distinction moved from the line style to a permanent on-map label
+// (see onEachFeature) sitting directly on the segment itself, so it's
+// still identifiable at the exact point of use, just not via color.
 const PREDICTED_COLOR = "#984ea3";
 
 function routeLineStyle(feature) {
   const p = feature.properties;
   if (p.kind !== "route_line") return {};
-
-  if (p.predicted) {
-    return { color: PREDICTED_COLOR, weight: 3, opacity: 0.85, dashArray: "1 8" };
-  }
-
-  // Confirmed and below-threshold both real, sourced evidence -- both
-  // solid now, by request. below_threshold is still exposed in the
-  // popup text so the confidence distinction isn't lost, just not
-  // carried in the line style anymore.
+  // Confirmed, below-threshold, and predicted all render the same solid
+  // red line now -- see onEachFeature for how predicted stays labeled.
   return { color: REAL_COLOR, weight: 4 };
 }
 
@@ -78,6 +70,14 @@ function onEachFeature(feature, layer) {
     );
   } else if (p.kind === "route_line") {
     if (p.predicted) {
+      // Line color/weight matches confirmed data now -- this permanent
+      // label is the ONLY thing that still marks this specific segment
+      // as predicted at a glance, so it stays visible without a click,
+      // right on the segment itself, not just in a general disclaimer.
+      layer.bindTooltip(
+        `<span style="color:#984ea3;font-weight:bold;">predicted</span>`,
+        { permanent: true, direction: "center", className: "predicted-tooltip" }
+      );
       layer.bindPopup(
         `<b style="color:#984ea3">⚠ PREDICTED -- not sourced</b><br/>` +
           `Road-snapped guess connecting two real, confirmed points that no ` +
@@ -206,9 +206,9 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
     ...geojson,
     features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
   };
-  const hasPredicted = filtered.features.some(
-    (f) => f.properties.kind === "route_line" && f.properties.predicted
-  );
+  const routeLines = filtered.features.filter((f) => f.properties.kind === "route_line");
+  const predictedCount = routeLines.filter((f) => f.properties.predicted).length;
+  const hasPredicted = predictedCount > 0;
 
   return (
     <div>
@@ -224,8 +224,10 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
             marginBottom: 8,
           }}
         >
-          <b style={{ color: "#984ea3" }}>⚠ Dotted purple = predicted</b> -- not
-          a confirmed route.
+          {routeLines.length - predictedCount}/{routeLines.length} of this route is
+          confirmed; the rest (labeled{" "}
+          <span style={{ color: "#984ea3", fontWeight: "bold" }}>predicted</span> directly
+          on the map) is a road-snapped inference, not a confirmed turn-by-turn instruction.
         </p>
       )}
       <MapContainer
