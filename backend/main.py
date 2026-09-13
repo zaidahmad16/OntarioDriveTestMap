@@ -8,7 +8,6 @@ exists to produce -- requires a signed-in Google account, checked via the
 """
 
 import os
-from collections import defaultdict
 
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -111,55 +110,11 @@ def get_centre(centre_id: str):
     return row
 
 
-def _connect_segments(points):
-    """Chain consensus_segments into walkable paths by shared street name.
-
-    Each point here is already real, scored evidence -- it passed
-    build_consensus.py's own threshold to exist in this table at all.
-    Most of them just never got promoted into an official route_line,
-    because that requires a full trace-level family cluster with enough
-    corroborating traces (see analysis/consensus_geometry.py). This adds
-    ordering only, using the same street-adjacency approach that
-    pipeline's own order_walk() uses for its route_lines: two points end
-    up adjacent in a drawn line only because a real published segment
-    says those two streets meet, never by proximity or guesswork. No
-    point moves and nothing is snapped to a road -- these are straight
-    lines between real junction coordinates, not OSRM-routed geometry
-    like the official route_lines get, which is why they're a visually
-    distinct, less-precise layer, not a replacement for the real thing.
-    """
-    edges = {i: p for i, p in enumerate(points) if p["street_a"] and p["street_b"]}
-    adj = defaultdict(list)
-    for i, p in edges.items():
-        adj[p["street_a"]].append((p["street_b"], i))
-        adj[p["street_b"]].append((p["street_a"], i))
-
-    unused = set(edges)
-    runs = []
-    while unused:
-        streets = {s for i in unused for s in (edges[i]["street_a"], edges[i]["street_b"])}
-        start = max(streets, key=lambda s: len([1 for _, i in adj[s] if i in unused]))
-        run, cur = [], start
-        while True:
-            nxt = next(((other, i) for other, i in adj[cur] if i in unused), None)
-            if not nxt:
-                break
-            other, i = nxt
-            unused.discard(i)
-            run.append(i)
-            cur = other
-        if run:
-            runs.append(run)
-    return runs
-
-
 @app.get("/centres/{centre_id}/map")
 def get_map(centre_id: str, user=Depends(require_user)):
-    """One GeoJSON FeatureCollection: official route lines (if any exist
-    for this centre -- Smiths Falls currently has none, that's real, not
-    a bug), a "connected_segments" layer chaining every scored junction
-    into walkable paths by shared street name (see _connect_segments),
-    and every scored junction as its own point feature."""
+    """One GeoJSON FeatureCollection: route lines (if any exist for this
+    centre -- Smiths Falls currently has none, that's real, not a bug)
+    plus every scored junction as its own point feature."""
     lines = query(
         "SELECT family, run, trace_count, authors, distance_m, geometry, "
         "test_class, mixed_classes "
@@ -191,23 +146,6 @@ def get_map(centre_id: str, user=Depends(require_user)):
                 },
             }
         )
-    for run in _connect_segments(points):
-        if len(run) < 2:
-            continue
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[points[i]["lon"], points[i]["lat"]] for i in run],
-                },
-                "properties": {
-                    "kind": "connected_segments",
-                    "segment_count": len(run),
-                },
-            }
-        )
-
     for pt in points:
         features.append(
             {

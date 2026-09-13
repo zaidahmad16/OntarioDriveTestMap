@@ -31,19 +31,8 @@ const CLASS_COLORS = {
 // here rather than removed, for whenever real data produces one.
 const UNCLASSED_COLOR = "#888888";
 
-// connected_segments is a second, lower-precision layer: real scored
-// junctions chained by shared street name (see backend/main.py's
-// _connect_segments), not the trace-clustered, OSRM-snapped official
-// route_lines. Thin and pale on purpose -- it should read as "here's
-// the connected shape the evidence forms," not compete visually with
-// an actual published route.
-const CONNECTED_SEGMENTS_COLOR = "#2ca25f";
-
 function routeLineStyle(feature) {
   const p = feature.properties;
-  if (p.kind === "connected_segments") {
-    return { color: CONNECTED_SEGMENTS_COLOR, weight: 2, opacity: 0.7 };
-  }
   if (p.kind !== "route_line") return {};
   if (p.mixed_classes) {
     return { color: UNCLASSED_COLOR, weight: 4, dashArray: "6 4" };
@@ -74,13 +63,6 @@ function onEachFeature(feature, layer) {
         `${p.video_count} video, ${p.text_count} text<br/>` +
         `last seen: ${p.last_seen || "unknown"}`
     );
-  } else if (p.kind === "connected_segments") {
-    layer.bindPopup(
-      `<b>Connected evidence path</b><br/>` +
-        `${p.segment_count} scored junctions chained by shared street name.<br/>` +
-        `Not an official published route -- see individual dots for each ` +
-        `junction's own author/video/text support.`
-    );
   } else if (p.kind === "route_line") {
     const classLabel = p.mixed_classes
       ? `${p.test_class || "class unknown"} (mixed -- traces disagree)`
@@ -93,23 +75,9 @@ function onEachFeature(feature, layer) {
   }
 }
 
-// Route lines only -- consensus_segments (the dots) carry no test_class
-// at all, so a class filter has nothing to say about them one way or
-// the other. They stay visible regardless of which button is active.
-function matchesFilter(feature, filter) {
-  if (feature.properties.kind !== "route_line") return true;
-  if (filter === "all") return true;
-  return feature.properties.test_class === filter;
-}
-
 export default function MapView({ centreId }) {
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
-  const [classFilter, setClassFilter] = useState("all");
-
-  useEffect(() => {
-    setClassFilter("all"); // don't carry a filter across to a different centre
-  }, [centreId]);
 
   useEffect(() => {
     let stale = false;
@@ -132,50 +100,24 @@ export default function MapView({ centreId }) {
   if (!geojson) return <p>Loading map…</p>;
 
   const center = CENTRE_COORDS[centreId] || [45, -76];
-  const filtered = {
-    ...geojson,
-    features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
-  };
 
   return (
-    <div>
-      <div style={{ marginBottom: 8 }}>
-        {["all", "G", "G2"].map((f) => (
-          <button
-            key={f}
-            onClick={() => setClassFilter(f)}
-            style={{
-              marginRight: 6,
-              padding: "4px 10px",
-              fontWeight: classFilter === f ? "bold" : "normal",
-              border: classFilter === f ? "2px solid #333" : "1px solid #ccc",
-              cursor: "pointer",
-            }}
-          >
-            {f === "all" ? "All routes" : f}
-          </button>
-        ))}
-      </div>
-      <MapContainer
-        key={centreId} // force a clean remount per centre, avoids stale-view bugs
-        center={center}
-        zoom={13}
-        style={{ height: "600px", width: "100%" }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-        <GeoJSON
-          key={classFilter} // react-leaflet's GeoJSON doesn't reliably re-diff
-          // an in-place data swap -- remount on filter change instead, same
-          // reasoning as the MapContainer's own centreId key above.
-          data={filtered}
-          style={routeLineStyle}
-          pointToLayer={pointToLayer}
-          onEachFeature={onEachFeature}
-        />
-      </MapContainer>
-    </div>
+    <MapContainer
+      key={centreId} // force a clean remount per centre, avoids stale-view bugs
+      center={center}
+      zoom={13}
+      style={{ height: "600px", width: "100%" }}
+    >
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution="&copy; OpenStreetMap contributors"
+      />
+      <GeoJSON
+        data={geojson}
+        style={routeLineStyle}
+        pointToLayer={pointToLayer}
+        onEachFeature={onEachFeature}
+      />
+    </MapContainer>
   );
 }
