@@ -17,10 +17,10 @@ const CENTRE_COORDS = {
 const centreIcon = L.divIcon({
   className: "",
   html:
-    '<div style="width:22px;height:22px;border-radius:50%;background:#111;' +
-    'border:4px solid #ffd400;box-shadow:0 0 0 2px #111,0 1px 6px rgba(0,0,0,.6);"></div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
+    '<div style="width:12px;height:12px;border-radius:50%;background:#111;' +
+    'border:3px solid #ffd400;box-shadow:0 0 0 1px #111,0 1px 4px rgba(0,0,0,.6);"></div>',
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
 });
 
 // Class color-coding (G orange / G2 blue) was dropped by explicit
@@ -34,10 +34,12 @@ const REAL_COLOR = "#e41a1c";
 // predicted: this is NOT sourced evidence -- it's a road-snapped guess
 // bridging two independently real, same-family points that no single
 // trace ever connected directly (see predict_family_bridges.py). Line
-// color/weight now matches confirmed data exactly, by request -- the
-// distinction moved from the line style to a permanent on-map label
-// (see onEachFeature) sitting directly on the segment itself, so it's
-// still identifiable at the exact point of use, just not via color.
+// color/weight matches confirmed data exactly, by request. A permanent
+// on-map label per segment was tried and dropped -- with several
+// predicted segments clustered together it overlapped into unreadable
+// clutter. Identification now lives off the map: the ratio banner, the
+// instructions table's inline tag, and this color reserved for text/
+// tags rather than the line itself.
 const PREDICTED_COLOR = "#984ea3";
 
 function routeLineStyle(feature) {
@@ -70,14 +72,14 @@ function onEachFeature(feature, layer) {
     );
   } else if (p.kind === "route_line") {
     if (p.predicted) {
-      // Line color/weight matches confirmed data now -- this permanent
-      // label is the ONLY thing that still marks this specific segment
-      // as predicted at a glance, so it stays visible without a click,
-      // right on the segment itself, not just in a general disclaimer.
-      layer.bindTooltip(
-        `<span style="color:#984ea3;font-weight:bold;">predicted</span>`,
-        { permanent: true, direction: "center", className: "predicted-tooltip" }
-      );
+      // Line color/weight matches confirmed data now. Permanent on-map
+      // tooltips were tried and dropped -- with several predicted
+      // segments close together (e.g. clustered near the centre) they
+      // overlapped into unreadable clutter. Per-segment identification
+      // now lives off the map instead: the instructions table below
+      // tags each predicted row inline, and this popup still gives full
+      // detail on click. The ratio banner covers the "at a glance"
+      // case without needing a label physically on every line.
       layer.bindPopup(
         `<b style="color:#984ea3">⚠ PREDICTED -- not sourced</b><br/>` +
           `Road-snapped guess connecting two real, confirmed points that no ` +
@@ -225,9 +227,10 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
           }}
         >
           {routeLines.length - predictedCount}/{routeLines.length} of this route is
-          confirmed; the rest (labeled{" "}
-          <span style={{ color: "#984ea3", fontWeight: "bold" }}>predicted</span> directly
-          on the map) is a road-snapped inference, not a confirmed turn-by-turn instruction.
+          confirmed; the rest is a road-snapped inference, not a confirmed
+          turn-by-turn instruction -- tagged{" "}
+          <span style={{ color: "#984ea3", fontWeight: "bold" }}>predicted</span> in the
+          instruction list below and each line's popup.
         </p>
       )}
       <MapContainer
