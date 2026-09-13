@@ -189,8 +189,8 @@ def migrate_centre(cur, centre_id):
                 """
                 INSERT INTO route_lines
                     (centre_id, family, run, trace_count, authors,
-                     distance_m, geometry)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                     distance_m, geometry, test_class, mixed_classes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -201,6 +201,8 @@ def migrate_centre(cur, centre_id):
                     props.get("authors"),
                     props.get("distance_m"),
                     json.dumps(feat["geometry"]["coordinates"]),
+                    props.get("test_class"),
+                    bool(props.get("mixed_classes")),
                 ),
             )
             route_id = cur.fetchone()[0]

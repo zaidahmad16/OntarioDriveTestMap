@@ -61,7 +61,9 @@ CREATE TABLE route_lines (
     trace_count INTEGER,
     authors INTEGER,
     distance_m INTEGER,
-    geometry JSONB NOT NULL
+    geometry JSONB NOT NULL,
+    test_class TEXT,
+    mixed_classes BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE route_line_segments (

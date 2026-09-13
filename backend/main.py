@@ -116,7 +116,8 @@ def get_map(centre_id: str, user=Depends(require_user)):
     centre -- Smiths Falls currently has none, that's real, not a bug)
     plus every scored junction as its own point feature."""
     lines = query(
-        "SELECT family, run, trace_count, authors, distance_m, geometry "
+        "SELECT family, run, trace_count, authors, distance_m, geometry, "
+        "test_class, mixed_classes "
         "FROM route_lines WHERE centre_id = %s",
         (centre_id,),
     )
@@ -140,6 +141,8 @@ def get_map(centre_id: str, user=Depends(require_user)):
                     "trace_count": line["trace_count"],
                     "authors": line["authors"],
                     "distance_m": line["distance_m"],
+                    "test_class": line["test_class"],
+                    "mixed_classes": line["mixed_classes"],
                 },
             }
         )
