@@ -1,0 +1,90 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  color: #1a1a1a;
+}
+
+.app header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e2e2;
+}
+
+.app header h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.layout {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+aside {
+  flex: 0 0 260px;
+}
+
+main {
+  flex: 1;
+  min-width: 0;
+}
+
+.centre-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.centre-list li {
+  margin-bottom: 0.5rem;
+}
+
+.centre-list button {
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.centre-list button span {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.centre-list button.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.trace-list {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.trace-list th,
+.trace-list td {
+  border-bottom: 1px solid #eee;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
