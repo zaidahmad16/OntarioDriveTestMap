@@ -188,13 +188,14 @@ def main():
 
                 pts = [{"lat": anchor["lat"], "lon": anchor["lon"]},
                        {"lat": centre_pt[0], "lon": centre_pt[1]}]
-                geom, dist = None, None
+                geom, dist, steps = None, None, []
                 if not args.dry_run:
                     try:
                         r = cg.osrm_route(pts, args.pause)
                         if r.get("code") == "Ok":
                             geom = r["routes"][0]["geometry"]
                             dist = r["routes"][0]["distance"]
+                            steps = cg.extract_steps(r)
                     except Exception as e:
                         print(f"     centre-link {i}: {str(e)[:80]}")
                 if geom is None:
@@ -216,6 +217,7 @@ def main():
                              distance_m, geometry, test_class, mixed_classes,
                              below_threshold, predicted, source)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (
                             centre_id, fid, run, len(traces), authors,
@@ -225,6 +227,7 @@ def main():
                             "connect_centre_endpoints",
                         ),
                     )
+                    cg.insert_steps(cur, cur.fetchone()["id"], steps)
                 i += 1
 
     if args.dry_run:

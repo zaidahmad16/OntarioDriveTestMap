@@ -271,13 +271,14 @@ def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
     if len(pts) < 2:
         return None
 
-    geom, dist = None, None
+    geom, dist, steps = None, None, []
     if not args.dry_run:
         try:
             r = osrm_route(pts, args.pause)
             if r.get("code") == "Ok":
                 geom = r["routes"][0]["geometry"]
                 dist = r["routes"][0]["distance"]
+                steps = extract_steps(r)
             else:
                 print(f"     run {ri}: OSRM {r.get('code')}")
         except Exception as e:
@@ -289,6 +290,7 @@ def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
     return {
         "type": "Feature",
         "geometry": geom,
+        "_steps": steps,
         "properties": {
             "family": fid, "run": ri,
             "traces": len(traces), "authors": authors,
@@ -305,13 +307,144 @@ def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
 def osrm_route(points, pause=1.0):
     coords = ";".join(f"{p['lon']},{p['lat']}" for p in points)
     q = urllib.parse.urlencode({"overview": "full", "geometries": "geojson",
-                                "annotations": "nodes"})
+                                "annotations": "nodes", "steps": "true"})
     req = urllib.request.Request(f"{OSRM}/{coords}?{q}",
                                  headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=45) as r:
         d = json.loads(r.read().decode())
     time.sleep(pause)
     return d
+
+
+_MODIFIER_TEXT = {
+    "uturn": "make a U-turn", "sharp right": "turn sharp right",
+    "right": "turn right", "slight right": "turn slightly right",
+    "straight": "continue straight", "slight left": "turn slightly left",
+    "left": "turn left", "sharp left": "turn sharp left",
+}
+
+
+def step_instruction(step):
+    """One OSRM step -> a plain-English instruction, in the same style
+    as a normal turn-by-turn app. Not a full reimplementation of OSRM's
+    own text-instructions library -- just enough of its cases to read
+    naturally for the maneuver types this pipeline actually produces
+    (depart/turn/new name/arrive/roundabout), all built from the SAME
+    real routing response already fetched for the line's geometry --
+    nothing here is invented, it's OSRM's own account of a real path
+    between real points, reformatted."""
+    m = step.get("maneuver", {})
+    name = step.get("name") or "the road"
+    mtype = m.get("type", "")
+    modifier = m.get("modifier", "")
+
+    if mtype == "depart":
+        return f"Head onto {name}" if name != "the road" else "Head out"
+    if mtype == "arrive":
+        return "Arrive at destination"
+    if mtype in ("roundabout", "rotary"):
+        exit_n = m.get("exit", 1)
+        return f"Enter the roundabout and take exit {exit_n} onto {name}"
+    if mtype == "new name":
+        return f"Continue onto {name}"
+    if mtype == "turn" or mtype == "end of road":
+        verb = _MODIFIER_TEXT.get(modifier, "continue")
+        return f"{verb.capitalize()} onto {name}"
+    if mtype == "merge":
+        return f"Merge onto {name}"
+    if mtype == "fork":
+        verb = _MODIFIER_TEXT.get(modifier, "continue")
+        return f"At the fork, {verb} onto {name}"
+    return f"Continue onto {name}"
+
+
+def insert_steps(cur, route_line_id, steps):
+    """Shared by every script that inserts into route_lines and has
+    step data to go with it -- one insert loop, not four copies."""
+    for i, s in enumerate(steps):
+        cur.execute(
+            """
+            INSERT INTO route_line_steps
+                (route_line_id, step_order, instruction, distance_m, duration_s)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (route_line_id, i, s["instruction"], s["distance_m"], s["duration_s"]),
+        )
+
+
+def extract_steps(osrm_response):
+    """OSRM's own leg/step breakdown for a route already fetched with
+    steps=true -> a flat, ordered list of {instruction, distance_m,
+    duration_s}. Returns [] if the response has no step data (e.g. a
+    dry run's synthetic straight-line geometry, which never calls
+    OSRM).
+
+    Two OSRM behaviours get corrected here, not just formatted:
+
+    1. OSRM creates one "leg" PER WAYPOINT PAIR in the request, and
+       every leg gets its own depart/arrive pair -- even though our
+       waypoints are real junctions along ONE continuous route, not
+       separate trips. Passed through raw, a 4-junction route becomes
+       3 fake "arrive at destination" / "head onto X" pairs instead of
+       one real trip with 2 real turns. Fixed by only keeping the
+       FIRST leg's depart and the LAST leg's arrive; every other leg's
+       "arrive" is dropped (it's not a real destination) and its
+       "depart" becomes a real turn-onto-the-next-road instruction.
+
+    2. OSRM emits a new step at every minor road-geometry change, not
+       just at meaningful turns -- a single street with a few gentle
+       bends produces a dozen "new name" steps for what a human
+       describes as one turn onto that street. Consecutive steps that
+       stay on the same named road get merged, distances/durations
+       summed -- genuine turns, forks, roundabouts, and the real
+       depart/arrive always stay their own row.
+    """
+    legs = osrm_response.get("routes", [{}])[0].get("legs", [])
+    n = len(legs)
+    flat = []
+    for li, leg in enumerate(legs):
+        for step in leg.get("steps", []):
+            m = step.get("maneuver", {})
+            mtype = m.get("type", "")
+            if mtype == "arrive" and li < n - 1:
+                continue  # not a real destination -- the next leg's depart covers this junction
+            if mtype == "depart" and li > 0:
+                # a mid-route junction, not the real start -- describe it
+                # as the turn it actually is, not a fresh "head onto"
+                name = step.get("name") or "the road"
+                flat.append({
+                    "instruction": f"Continue onto {name}",
+                    "distance_m": round(step.get("distance", 0)),
+                    "duration_s": round(step.get("duration", 0)),
+                    "_name": name,
+                })
+                continue
+            flat.append({
+                "instruction": step_instruction(step),
+                "distance_m": round(step.get("distance", 0)),
+                "duration_s": round(step.get("duration", 0)),
+                "_name": step.get("name") or "",
+            })
+
+    out, current = [], None
+    for row in flat:
+        is_continuation = (
+            current is not None
+            and row["_name"] == current["_name"]
+            and row["instruction"].startswith(("Continue", "Turn slightly"))
+        )
+        if is_continuation:
+            current["distance_m"] += row["distance_m"]
+            current["duration_s"] += row["duration_s"]
+            continue
+        if current is not None:
+            out.append(current)
+        current = row
+    if current is not None:
+        out.append(current)
+    for row in out:
+        del row["_name"]
+    return out
 
 
 def main():

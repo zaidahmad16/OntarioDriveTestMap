@@ -159,6 +159,7 @@ def main():
                              distance_m, geometry, test_class, mixed_classes,
                              below_threshold, source)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (
                             centre_id, fid, p["run"], p["traces"], p["authors"],
@@ -167,6 +168,7 @@ def main():
                             "recover_low_confidence_routes",
                         ),
                     )
+                    cg.insert_steps(cur, cur.fetchone()["id"], feat.get("_steps", []))
 
     if args.dry_run:
         print(f"\n[dry run, nothing written] {total_recovered} recoverable "

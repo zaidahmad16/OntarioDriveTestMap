@@ -83,6 +83,15 @@ CREATE TABLE route_line_segments (
     last_seen DATE
 );
 
+CREATE TABLE route_line_steps (
+    id SERIAL PRIMARY KEY,
+    route_line_id INTEGER NOT NULL REFERENCES route_lines(id) ON DELETE CASCADE,
+    step_order INTEGER NOT NULL,
+    instruction TEXT NOT NULL,
+    distance_m INTEGER,
+    duration_s INTEGER
+);
+
 CREATE INDEX idx_traces_centre ON traces(centre_id);
 CREATE INDEX idx_segments_centre ON consensus_segments(centre_id);
 CREATE INDEX idx_routes_centre ON route_lines(centre_id);

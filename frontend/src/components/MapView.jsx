@@ -127,6 +127,74 @@ function FitToData({ geojson, centreLatLng }) {
   return null;
 }
 
+function formatDistance(m) {
+  if (m == null) return "";
+  return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(2)} km`;
+}
+
+function formatDuration(s) {
+  if (s == null) return "";
+  if (s === 0) return "0 min";
+  const mins = Math.max(1, Math.round(s / 60));
+  return `${mins} min`;
+}
+
+// Turn-by-turn table, concatenated across every route_line in the
+// current class -- one running numbered list, in family/run order (the
+// API already sorts that way). Each row's instruction/distance/duration
+// comes straight from OSRM's own step breakdown for that line's real,
+// already-stored geometry -- not re-derived or guessed here.
+function InstructionsTable({ lines }) {
+  const rows = [];
+  for (const line of lines) {
+    const p = line.properties;
+    for (const step of p.steps || []) {
+      rows.push({ ...step, predicted: p.predicted });
+    }
+  }
+  if (!rows.length) return null;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p style={{ fontSize: "0.85em", color: "#555", marginBottom: 6 }}>
+        Distances and durations are calculated by routing software between
+        the collected data points, not measured from a live drive.
+      </p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
+        <thead>
+          <tr style={{ textAlign: "left", borderBottom: "2px solid #333" }}>
+            <th style={{ padding: "4px 8px" }}>#</th>
+            <th style={{ padding: "4px 8px" }}>Instruction</th>
+            <th style={{ padding: "4px 8px" }}>Distance</th>
+            <th style={{ padding: "4px 8px" }}>Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr
+              key={i}
+              style={{
+                background: i % 2 ? "#f7f7f7" : "white",
+                borderBottom: "1px solid #eee",
+              }}
+            >
+              <td style={{ padding: "4px 8px" }}>{i + 1}</td>
+              <td style={{ padding: "4px 8px" }}>
+                {r.instruction}
+                {r.predicted && (
+                  <span style={{ color: "#984ea3", fontWeight: "bold" }}> (predicted)</span>
+                )}
+              </td>
+              <td style={{ padding: "4px 8px" }}>{formatDistance(r.distance_m)}</td>
+              <td style={{ padding: "4px 8px" }}>{formatDuration(r.duration_s)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // One map, one class visible at a time -- switching via the buttons
 // below fully remounts the map (key includes classFilter) so there is
 // never a moment where both classes' geometry is present together.
@@ -183,6 +251,9 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
         />
         <FitToData geojson={filtered} centreLatLng={center} />
       </MapContainer>
+      <InstructionsTable
+        lines={filtered.features.filter((f) => f.properties.kind === "route_line")}
+      />
     </div>
   );
 }
