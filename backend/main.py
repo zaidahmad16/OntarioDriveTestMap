@@ -117,7 +117,7 @@ def get_map(centre_id: str, user=Depends(require_user)):
     plus every scored junction as its own point feature."""
     lines = query(
         "SELECT family, run, trace_count, authors, distance_m, geometry, "
-        "test_class, mixed_classes, below_threshold "
+        "test_class, mixed_classes, below_threshold, predicted "
         "FROM route_lines WHERE centre_id = %s",
         (centre_id,),
     )
@@ -144,6 +144,7 @@ def get_map(centre_id: str, user=Depends(require_user)):
                     "test_class": line["test_class"],
                     "mixed_classes": line["mixed_classes"],
                     "below_threshold": line["below_threshold"],
+                    "predicted": line["predicted"],
                 },
             }
         )

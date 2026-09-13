@@ -31,9 +31,23 @@ const CLASS_COLORS = {
 // here rather than removed, for whenever real data produces one.
 const UNCLASSED_COLOR = "#888888";
 
+// predicted: this is NOT sourced evidence -- it's a road-snapped guess
+// bridging two independently real, same-family points that no single
+// trace ever connected directly (see predict_family_bridges.py). This
+// is the one tier where a real person could drive a turn nobody
+// actually confirmed, so it does not get to share a color with
+// anything confirmed, at any zoom, ever. Bright, unmistakable, and
+// never reused elsewhere on this map.
+const PREDICTED_COLOR = "#984ea3";
+
 function routeLineStyle(feature) {
   const p = feature.properties;
   if (p.kind !== "route_line") return {};
+
+  if (p.predicted) {
+    return { color: PREDICTED_COLOR, weight: 3, opacity: 0.85, dashArray: "1 8" };
+  }
+
   const color = p.mixed_classes || !p.test_class
     ? UNCLASSED_COLOR
     : CLASS_COLORS[p.test_class] || "#31a354";
@@ -71,6 +85,15 @@ function onEachFeature(feature, layer) {
         `last seen: ${p.last_seen || "unknown"}`
     );
   } else if (p.kind === "route_line") {
+    if (p.predicted) {
+      layer.bindPopup(
+        `<b style="color:#984ea3">⚠ PREDICTED -- not sourced</b><br/>` +
+          `Road-snapped guess connecting two real, confirmed points that no ` +
+          `trace directly walked between. Family ${p.family}, ~${p.distance_m}m.<br/>` +
+          `<b>Do not treat this as a confirmed turn-by-turn instruction.</b>`
+      );
+      return;
+    }
     const classLabel = p.mixed_classes
       ? `${p.test_class || "class unknown"} (mixed -- traces disagree)`
       : p.test_class || "class unknown";
@@ -146,9 +169,29 @@ export default function MapView({ centreId }) {
     ...geojson,
     features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
   };
+  const hasPredicted = filtered.features.some(
+    (f) => f.properties.kind === "route_line" && f.properties.predicted
+  );
 
   return (
     <div>
+      {hasPredicted && (
+        <p
+          style={{
+            background: "#f5eaf7",
+            border: "1px solid #984ea3",
+            color: "#5c1f66",
+            padding: "6px 10px",
+            borderRadius: 4,
+            fontSize: "0.9em",
+            marginBottom: 8,
+          }}
+        >
+          <b style={{ color: "#984ea3" }}>⚠ Dotted purple lines are predicted</b>{" "}
+          -- road-snapped guesses connecting real, confirmed points that no
+          single source actually walked between. Not a confirmed route.
+        </p>
+      )}
       <div style={{ marginBottom: 8 }}>
         {["all", "G", "G2"].map((f) => (
           <button

@@ -64,7 +64,8 @@ CREATE TABLE route_lines (
     geometry JSONB NOT NULL,
     test_class TEXT,
     mixed_classes BOOLEAN NOT NULL DEFAULT false,
-    below_threshold BOOLEAN NOT NULL DEFAULT false
+    below_threshold BOOLEAN NOT NULL DEFAULT false,
+    predicted BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE route_line_segments (
