@@ -127,11 +127,12 @@ function FitToData({ geojson, centreLatLng }) {
   return null;
 }
 
-// One class, one self-contained map -- no shared filter state, no
-// possibility of one class's lines rendering on top of the other's.
-// Requested explicitly: side-by-side instead of a single map with a
-// toggle, because overlap between G and G2 geometry was confusing even
-// with different styling.
+// One map, one class visible at a time -- switching via the buttons
+// below fully remounts the map (key includes classFilter) so there is
+// never a moment where both classes' geometry is present together.
+// Two side-by-side maps were tried first and explicitly rejected: same
+// underlying dots (they carry no class at all) shown twice side by
+// side read as duplicated/overlapping, not as a clean comparison.
 function RoutePanel({ centreId, geojson, classFilter, center }) {
   const filtered = {
     ...geojson,
@@ -142,8 +143,7 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
   );
 
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <h4 style={{ margin: "0 0 6px" }}>{classFilter} route</h4>
+    <div>
       {hasPredicted && (
         <p
           style={{
@@ -190,6 +190,11 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
 export default function MapView({ centreId }) {
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
+  const [classFilter, setClassFilter] = useState("G");
+
+  useEffect(() => {
+    setClassFilter("G"); // don't carry a filter across to a different centre
+  }, [centreId]);
 
   useEffect(() => {
     let stale = false;
@@ -214,9 +219,30 @@ export default function MapView({ centreId }) {
   const center = CENTRE_COORDS[centreId] || [45, -76];
 
   return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      <RoutePanel centreId={centreId} geojson={geojson} classFilter="G" center={center} />
-      <RoutePanel centreId={centreId} geojson={geojson} classFilter="G2" center={center} />
+    <div>
+      <div style={{ marginBottom: 8 }}>
+        {["G", "G2"].map((f) => (
+          <button
+            key={f}
+            onClick={() => setClassFilter(f)}
+            style={{
+              marginRight: 6,
+              padding: "4px 10px",
+              fontWeight: classFilter === f ? "bold" : "normal",
+              border: classFilter === f ? "2px solid #333" : "1px solid #ccc",
+              cursor: "pointer",
+            }}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+      <RoutePanel
+        centreId={centreId}
+        geojson={geojson}
+        classFilter={classFilter}
+        center={center}
+      />
     </div>
   );
 }
