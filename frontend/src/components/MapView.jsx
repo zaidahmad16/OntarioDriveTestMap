@@ -295,95 +295,69 @@ function formatSpeedLimit(v) {
   return /^\d+$/.test(v) ? `${v} km/h` : v; // plain number = km/h in this region; "45 mph" etc. kept as-is
 }
 
-function segmentLabel(p) {
-  if (p.predicted) return `Family ${p.family} -- predicted connector`;
-  if (p.source === "connect_centre_endpoints") return `Family ${p.family} -- connection to the centre`;
-  if (p.below_threshold) return `Family ${p.family} -- real, lower-confidence segment`;
-  return `Family ${p.family} -- confirmed route`;
-}
-
-// Turn-by-turn table, grouped by route_line -- NOT one continuous
-// numbered list. That was tried first and was actively misleading: a
-// centre can have 10-16 separate route_line fragments (confirmed,
-// below-threshold, predicted bridges, centre links), and flattening
-// them into one sequential list made it look like one continuous drive
-// that revisits the same streets out of nowhere (e.g. "Head onto
-// Eastvale Drive" appearing 5 separate times) -- these are genuinely
-// separate pieces of evidence, not one path, and presenting them as
-// if they were one trip was the actual bug, not a formatting choice.
-// Each section keeps its own real numbering and its own real "arrive,"
-// since that arrival is now honestly the end of THAT segment, not a
-// false claim about finishing the whole route.
+// ONE turn-by-turn list for the whole route. lines is a single route's
+// pieces (one family); flatten them into one continuous numbered list.
+// A mid-route "Arrive at destination" is just where one collected piece
+// ended, not the end of the drive, so only the very last one is kept.
 function InstructionsTable({ lines }) {
-  const segments = lines
-    .filter((l) => (l.properties.steps || []).length > 0)
-    .map((l) => ({ label: segmentLabel(l.properties), predicted: l.properties.predicted, steps: l.properties.steps }));
-  if (!segments.length) return null;
+  const rows = [];
+  for (const l of lines) {
+    const predicted = l.properties.predicted;
+    for (const s of l.properties.steps || []) {
+      rows.push({ ...s, predicted });
+    }
+  }
+  const steps = rows.filter(
+    (r, i) => r.instruction !== "Arrive at destination" || i === rows.length - 1
+  );
+  if (!steps.length) return null;
 
-  const allSteps = segments.flatMap((s) => s.steps);
-  const totalDistanceM = allSteps.reduce((a, r) => a + (r.distance_m || 0), 0);
+  const totalDistanceM = steps.reduce((a, r) => a + (r.distance_m || 0), 0);
 
   return (
     <div style={{ marginTop: 12 }}>
       <p style={{ fontSize: "0.9em", marginBottom: 4 }}>
-        <b>Total: {formatDistance(totalDistanceM)}, {sumDuration(allSteps)}</b> across
-        all {segments.length} segments below -- these are separate real fragments of
-        this route's evidence, not one continuous drive from top to bottom.
+        <b>Total: {formatDistance(totalDistanceM)}, {sumDuration(steps)}</b> for this
+        route.
       </p>
       <p style={{ fontSize: "0.85em", color: "#555", marginBottom: 6 }}>
-        Distances and durations are calculated by routing software between
-        the collected data points, not measured from a live drive -- a routed
-        "2 s" turn does not account for actually slowing down and turning.{" "}
-        <span style={{ background: "#f5eaf7", padding: "0 3px" }}>Shaded segments</span>{" "}
-        are predicted (see banner above), not sourced from a trace. Junction
-        and speed limit data is real OSM tagging where available -- blank
-        means untagged in OpenStreetMap, not "none."
+        Distances and durations are calculated by routing software between the
+        collected data points, not measured from a live drive.{" "}
+        <span style={{ background: "#f5eaf7", padding: "0 3px" }}>Shaded rows</span> are
+        predicted (a road-snapped guess, see banner above), not sourced from a trace.
+        Junction and speed-limit data is real OSM tagging where available -- blank means
+        untagged, not "none."
       </p>
-      {segments.map((seg, si) => (
-        <div key={si} style={{ marginBottom: 14 }}>
-          <div
-            style={{
-              fontWeight: "bold",
-              fontSize: "0.9em",
-              padding: "4px 8px",
-              background: seg.predicted ? "#f5eaf7" : "#eee",
-              color: seg.predicted ? "#984ea3" : "#333",
-            }}
-          >
-            {seg.label}
-          </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "2px solid #333" }}>
-                <th style={{ padding: "4px 8px" }}>#</th>
-                <th style={{ padding: "4px 8px" }}>Instruction</th>
-                <th style={{ padding: "4px 8px" }}>Distance</th>
-                <th style={{ padding: "4px 8px" }}>Duration</th>
-                <th style={{ padding: "4px 8px" }}>At junction</th>
-                <th style={{ padding: "4px 8px" }}>Speed limit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {seg.steps.map((r, i) => (
-                <tr
-                  key={i}
-                  style={{
-                    background: r.predicted ? "#f5eaf7" : i % 2 ? "#f7f7f7" : "white",
-                    borderBottom: "1px solid #eee",
-                  }}
-                >
-                  <td style={{ padding: "4px 8px" }}>{i + 1}</td>
-                  <td style={{ padding: "4px 8px" }}>{r.instruction}</td>
-                  <td style={{ padding: "4px 8px" }}>{formatDistance(r.distance_m)}</td>
-                  <td style={{ padding: "4px 8px" }}>{formatDuration(r.duration_s)}</td>
-                  <td style={{ padding: "4px 8px" }}>{formatTrafficControl(r.traffic_control)}</td>
-                  <td style={{ padding: "4px 8px" }}>{formatSpeedLimit(r.speed_limit)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
+        <thead>
+          <tr style={{ textAlign: "left", borderBottom: "2px solid #333" }}>
+            <th style={{ padding: "4px 8px" }}>#</th>
+            <th style={{ padding: "4px 8px" }}>Instruction</th>
+            <th style={{ padding: "4px 8px" }}>Distance</th>
+            <th style={{ padding: "4px 8px" }}>Duration</th>
+            <th style={{ padding: "4px 8px" }}>At junction</th>
+            <th style={{ padding: "4px 8px" }}>Speed limit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {steps.map((r, i) => (
+            <tr
+              key={i}
+              style={{
+                background: r.predicted ? "#f5eaf7" : i % 2 ? "#f7f7f7" : "white",
+                borderBottom: "1px solid #eee",
+              }}
+            >
+              <td style={{ padding: "4px 8px" }}>{i + 1}</td>
+              <td style={{ padding: "4px 8px" }}>{r.instruction}</td>
+              <td style={{ padding: "4px 8px" }}>{formatDistance(r.distance_m)}</td>
+              <td style={{ padding: "4px 8px" }}>{formatDuration(r.duration_s)}</td>
+              <td style={{ padding: "4px 8px" }}>{formatTrafficControl(r.traffic_control)}</td>
+              <td style={{ padding: "4px 8px" }}>{formatSpeedLimit(r.speed_limit)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
