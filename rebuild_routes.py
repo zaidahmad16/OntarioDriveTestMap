@@ -194,46 +194,47 @@ def order_by_street_graph(seg, keep, centre):
     return ordered
 
 
+def ordered_junctions(t, g):
+    """A trace is one person's real drive: its turns, in order, are the
+    route in the order it was actually driven. Turn each consecutive
+    street pair into its real junction node, keeping order and dropping
+    only consecutive duplicates. This is what makes routes come out as
+    real loops instead of a TSP guess that U-turns and back-tracks."""
+    st = [x["street"] for x in t.get("turns", [])]
+    nodes = []
+    last = None
+    for a, b in zip(st, st[1:]):
+        if a == b or a.startswith("@") or b.startswith("@"):
+            continue
+        j = g.junction(a, b)
+        if not j:
+            continue
+        key = (round(j["lat"], 6), round(j["lon"], 6))
+        if key != last:
+            nodes.append(j)
+            last = key
+    return nodes
+
+
 def build_one_route(traces, g, centre, threshold, pause, dry):
-    """One family -> one connected route dict, or None if too little to draw."""
-    seg = cg.support(traces, g)
-    thin = len(traces) < 3
-    # Require corroboration: a junction only belongs on the route if at
-    # least two independent sources named it. Single-author junctions are
-    # where the outliers live (one trace's stray mention of a street 4 km
-    # off the route), and they were dragging the Walkley G loop out to
-    # 36 km+. A thin (1-2 trace) route can't corroborate anything, so it
-    # keeps its own full path.
-    keep = [k for k, v in seg.items()
-            if thin or len(v["video"] | v["text"]) >= 2]
-    if len(keep) < 2:
-        # nothing corroborated (or too little) -- fall back to the weight
-        # threshold, then to everything, so the route still draws.
-        keep = [k for k, v in seg.items() if sum(v["w"].values()) >= threshold] \
-            or list(seg.keys())
-    ordered = order_by_street_graph(seg, keep, centre)
-    if len(ordered) < 2:
+    """One family -> one connected route, ordered by the most complete
+    real drive in it. Returns None if no trace has enough of a path."""
+    ranked = sorted(traces, key=lambda t: len(ordered_junctions(t, g)), reverse=True)
+    backbone = ranked[0] if ranked else None
+    nodes = ordered_junctions(backbone, g) if backbone else []
+    if len(nodes) < 2:
         return None
 
-    # Put the centre first, then let OSRM's trip (TSP) service find the
-    # shortest ROUND TRIP that visits every real junction and returns to the
-    # centre -- a driving test is a loop from the centre, and solving the
-    # visiting order this way turns a 57 km nearest-neighbour zig-zag into a
-    # clean loop. Falls back to a plain in-order route if trip is unavailable.
-    pts = [{"lat": centre[0], "lon": centre[1]}] + [{"lat": n["lat"], "lon": n["lon"]} for n in ordered]
+    pts = [{"lat": n["lat"], "lon": n["lon"]} for n in nodes]
     geom, dist, steps = None, None, []
+    # Route through the junctions IN THE DRIVEN ORDER (plain route service,
+    # not trip -- the order is already real, we don't want it re-optimised).
     try:
-        r = osrm_trip(pts, pause)
-        if r.get("code") == "Ok" and r.get("trips"):
-            geom = r["trips"][0]["geometry"]
-            dist = r["trips"][0]["distance"]
-            steps = cg.extract_steps({"routes": r["trips"]}, g)
-        else:
-            r = cg.osrm_route(pts, pause)
-            if r.get("code") == "Ok":
-                geom = r["routes"][0]["geometry"]
-                dist = r["routes"][0]["distance"]
-                steps = cg.extract_steps(r, g)
+        r = cg.osrm_route(pts, pause)
+        if r.get("code") == "Ok":
+            geom = r["routes"][0]["geometry"]
+            dist = r["routes"][0]["distance"]
+            steps = cg.extract_steps(r, g)
     except Exception as e:
         print(f"      OSRM error: {str(e)[:70]}")
     if geom is None:
@@ -245,7 +246,8 @@ def build_one_route(traces, g, centre, threshold, pause, dry):
         "steps": steps,
         "trace_count": len(traces),
         "authors": authors,
-        "n_junctions": len(ordered),
+        "n_junctions": len(nodes),
+        "backbone": backbone.get("source_id", "?"),
     }
 
 
