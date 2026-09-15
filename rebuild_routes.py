@@ -198,9 +198,19 @@ def build_one_route(traces, g, centre, threshold, pause, dry):
     """One family -> one connected route dict, or None if too little to draw."""
     seg = cg.support(traces, g)
     thin = len(traces) < 3
-    keep = [k for k, v in seg.items() if thin or sum(v["w"].values()) >= threshold]
+    # Require corroboration: a junction only belongs on the route if at
+    # least two independent sources named it. Single-author junctions are
+    # where the outliers live (one trace's stray mention of a street 4 km
+    # off the route), and they were dragging the Walkley G loop out to
+    # 36 km+. A thin (1-2 trace) route can't corroborate anything, so it
+    # keeps its own full path.
+    keep = [k for k, v in seg.items()
+            if thin or len(v["video"] | v["text"]) >= 2]
     if len(keep) < 2:
-        keep = list(seg.keys())  # fall back to everything the traces named
+        # nothing corroborated (or too little) -- fall back to the weight
+        # threshold, then to everything, so the route still draws.
+        keep = [k for k, v in seg.items() if sum(v["w"].values()) >= threshold] \
+            or list(seg.keys())
     ordered = order_by_street_graph(seg, keep, centre)
     if len(ordered) < 2:
         return None
