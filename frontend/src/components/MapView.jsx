@@ -388,78 +388,89 @@ function InstructionsTable({ lines }) {
   );
 }
 
-// One map, one class visible at a time -- switching via the buttons
-// below fully remounts the map (key includes classFilter) so there is
-// never a moment where both classes' geometry is present together.
-// Two side-by-side maps were tried first and explicitly rejected: same
-// underlying dots (they carry no class at all) shown twice side by
-// side read as duplicated/overlapping, not as a clean comparison.
-function RoutePanel({ centreId, geojson, classFilter, center }) {
-  const filtered = {
-    ...geojson,
-    features: geojson.features
-      .filter((f) => matchesFilter(f, classFilter))
-      // Drop zero-length route lines: an older predicted-bridge bug wrote a
-      // few 2-point lines whose endpoints coincide (a bridge from a point to
-      // itself). They draw nothing but still inflate counts. The generator
-      // no longer creates them; this guards any that remain in stored data.
-      .filter((f) => !isDegenerateRouteLine(f)),
-  };
-  // For the MAP layer only, split route lines at beeline gaps so the fake
-  // straight stretches render as dashed "unrouted gap" instead of solid
-  // confirmed road. The InstructionsTable keeps the un-split lines below,
-  // so a line's OSRM steps aren't duplicated across its pieces.
+// A driving test is ONE route. Group route_lines into selectable routes,
+// one per (test_class, family) -- so the app can show a single route at a
+// time instead of every variant and every inferred fragment piled on one
+// map (which read as "this doesn't look like one route" and summed a
+// nonsense 50-minute duration across unrelated routes). Popularity is the
+// family's trace_count: the most-corroborated route sorts first and is the
+// default.
+function buildRoutes(geojson) {
+  const byKey = new Map();
+  for (const f of geojson.features) {
+    if (f.properties.kind !== "route_line") continue;
+    if (isDegenerateRouteLine(f)) continue;
+    const cls = f.properties.test_class || "unknown";
+    const fam = f.properties.family;
+    const key = `${cls}|${fam}`;
+    if (!byKey.has(key)) byKey.set(key, { key, cls, fam, features: [], traces: 0, authors: 0 });
+    const r = byKey.get(key);
+    r.features.push(f);
+    r.traces = Math.max(r.traces, f.properties.trace_count || 0);
+    r.authors = Math.max(r.authors, f.properties.authors || 0);
+  }
+  return [...byKey.values()];
+}
+
+// Routes shown under a class button: that class, plus any still-unclassified
+// route (real geometry whose class isn't determined -- shown under both so
+// it's never hidden). Most-corroborated first.
+function routesForClass(routes, cls) {
+  return routes
+    .filter((r) => r.cls === cls || r.cls === "unknown")
+    .sort((a, b) => b.traces - a.traces || a.fam - b.fam);
+}
+
+function RoutePanel({ centreId, geojson, route, center }) {
+  const lineFeatures = route ? route.features.filter((f) => !isDegenerateRouteLine(f)) : [];
+  // consensus junction dots stay visible regardless of which route is
+  // selected -- they carry no class/family, they're the raw evidence layer.
+  const segPoints = geojson.features.filter((f) => f.properties.kind === "segment");
+  // split THIS route's lines at beeline gaps for the map; keep them un-split
+  // for the instructions table so a line's OSRM steps aren't duplicated.
   const mapData = {
-    ...geojson,
-    features: filtered.features.flatMap(splitAtGaps),
+    type: "FeatureCollection",
+    features: [...lineFeatures.flatMap(splitAtGaps), ...segPoints],
   };
-  const routeLines = filtered.features.filter((f) => f.properties.kind === "route_line");
-  const predictedCount = routeLines.filter((f) => f.properties.predicted).length;
-  const hasPredicted = predictedCount > 0;
   const gapCount = mapData.features.filter((f) => f.properties.kind === "route_gap").length;
+  const predictedCount = lineFeatures.filter((f) => f.properties.predicted).length;
+
+  // per-ROUTE distance/duration (one route, not every route summed).
+  const steps = lineFeatures.flatMap((f) => f.properties.steps || []);
+  const totalDur = steps.reduce((a, s) => a + (s.duration_s || 0), 0);
+  const totalDist = steps.reduce((a, s) => a + (s.distance_m || 0), 0);
 
   return (
     <div>
-      {gapCount > 0 && (
-        <p
-          style={{
-            background: "#f0f1f2",
-            border: "1px solid #7f8c8d",
-            color: "#4d5656",
-            padding: "6px 10px",
-            borderRadius: 4,
-            fontSize: "0.85em",
-            marginBottom: 8,
-          }}
-        >
-          {gapCount} <b>unrouted gap{gapCount === 1 ? "" : "s"}</b> shown as{" "}
-          <span style={{ color: "#7f8c8d", fontWeight: "bold" }}>dashed gray</span>:
-          the route data jumps in a straight line where the two ends don't connect
-          on the road map. The road pieces on either side are real; the dashed jump
-          is not a driven road.
+      {route && (
+        <p style={{ fontSize: "0.9em", marginBottom: 6 }}>
+          <b>
+            {formatDistance(totalDist)}
+            {totalDur ? `, ~${Math.round(totalDur / 60)} min driving` : ""}
+          </b>{" "}
+          from {route.traces} source{route.traces === 1 ? "" : "s"}. This is one
+          reconstructed route; it may be partial where sources didn't cover every
+          street.
         </p>
       )}
-      {hasPredicted && (
-        <p
-          style={{
-            background: "#f5eaf7",
-            border: "1px solid #984ea3",
-            color: "#5c1f66",
-            padding: "6px 10px",
-            borderRadius: 4,
-            fontSize: "0.85em",
-            marginBottom: 8,
-          }}
-        >
-          {routeLines.length - predictedCount}/{routeLines.length} of this route is
-          confirmed; the rest is a road-snapped inference, not a confirmed
-          turn-by-turn instruction -- tagged{" "}
-          <span style={{ color: "#984ea3", fontWeight: "bold" }}>predicted</span> in the
-          instruction list below and each line's popup.
+      {gapCount > 0 && (
+        <p style={{ background: "#f0f1f2", border: "1px solid #7f8c8d", color: "#4d5656", padding: "6px 10px", borderRadius: 4, fontSize: "0.85em", marginBottom: 8 }}>
+          {gapCount} <b>unrouted gap{gapCount === 1 ? "" : "s"}</b> shown{" "}
+          <span style={{ color: "#7f8c8d", fontWeight: "bold" }}>dashed gray</span>: the
+          data jumps straight where the two ends don't connect on the road map -- not a
+          driven road.
+        </p>
+      )}
+      {predictedCount > 0 && (
+        <p style={{ background: "#f5eaf7", border: "1px solid #984ea3", color: "#5c1f66", padding: "6px 10px", borderRadius: 4, fontSize: "0.85em", marginBottom: 8 }}>
+          Parts of this route are{" "}
+          <span style={{ color: "#984ea3", fontWeight: "bold" }}>predicted</span> -- a
+          road-snapped guess connecting two real points no single source drove between,
+          tagged in the instructions below. Not a confirmed turn-by-turn.
         </p>
       )}
       <MapContainer
-        key={`${centreId}-${classFilter}`} // force a clean remount per centre+class
+        key={`${centreId}-${route ? route.key : "none"}`}
         center={center}
         zoom={13}
         style={{ height: "600px", width: "100%" }}
@@ -481,9 +492,7 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
         />
         <FitToData geojson={mapData} centreLatLng={center} />
       </MapContainer>
-      <InstructionsTable
-        lines={filtered.features.filter((f) => f.properties.kind === "route_line")}
-      />
+      <InstructionsTable lines={lineFeatures} />
     </div>
   );
 }
@@ -491,20 +500,28 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
 export default function MapView({ centreId }) {
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
-  const [classFilter, setClassFilter] = useState("G");
-
-  useEffect(() => {
-    setClassFilter("G"); // don't carry a filter across to a different centre
-  }, [centreId]);
+  const [classFilter, setClassFilter] = useState(null);
+  const [routeKey, setRouteKey] = useState(null);
 
   useEffect(() => {
     let stale = false;
     setGeojson(null);
     setError(null);
+    setClassFilter(null);
+    setRouteKey(null);
     api
       .getMap(centreId)
       .then((data) => {
-        if (!stale) setGeojson(data);
+        if (stale) return;
+        setGeojson(data);
+        // default: the single most-corroborated route across both classes
+        // decides the class shown; then that class's top route is selected.
+        const rs = buildRoutes(data);
+        const best = rs.slice().sort((a, b) => b.traces - a.traces)[0];
+        const defClass = best && (best.cls === "G" || best.cls === "G2") ? best.cls : "G2";
+        setClassFilter(defClass);
+        const forClass = routesForClass(rs, defClass);
+        setRouteKey(forClass.length ? forClass[0].key : null);
       })
       .catch((err) => {
         if (!stale) setError(err.message);
@@ -518,32 +535,80 @@ export default function MapView({ centreId }) {
   if (!geojson) return <p>Loading map…</p>;
 
   const center = CENTRE_COORDS[centreId] || [45, -76];
+  const routes = buildRoutes(geojson);
+  const classRoutes = classFilter ? routesForClass(routes, classFilter) : [];
+  const selected = routes.find((r) => r.key === routeKey) || null;
+
+  function selectClass(c) {
+    setClassFilter(c);
+    const forClass = routesForClass(routes, c);
+    setRouteKey(forClass.length ? forClass[0].key : null);
+  }
+
+  if (!routes.length) {
+    // e.g. Smiths Falls today: junctions collected but no route reconstructed
+    // yet. Show the evidence points and say so plainly rather than a blank map.
+    return (
+      <div>
+        <p style={{ fontSize: "0.9em", color: "#555" }}>
+          No route reconstructed for this centre yet -- the collected sources cover
+          individual junctions (shown below) but not enough of a connected path to
+          draw a route. The dots are the real evidence gathered so far.
+        </p>
+        <RoutePanel centreId={centreId} geojson={geojson} route={null} center={center} />
+      </div>
+    );
+  }
 
   return (
     <div>
       <div style={{ marginBottom: 8 }}>
-        {["G", "G2"].map((f) => (
+        {["G", "G2"].map((c) => {
+          const n = routesForClass(routes, c).length;
+          return (
+            <button
+              key={c}
+              onClick={() => selectClass(c)}
+              disabled={!n}
+              title={n ? `${n} route${n === 1 ? "" : "s"}` : "no routes"}
+              style={{
+                marginRight: 6,
+                padding: "4px 12px",
+                fontWeight: classFilter === c ? "bold" : "normal",
+                border: classFilter === c ? "2px solid #333" : "1px solid #ccc",
+                cursor: n ? "pointer" : "not-allowed",
+                opacity: n ? 1 : 0.4,
+              }}
+            >
+              {c}
+            </button>
+          );
+        })}
+      </div>
+      {/* one button per distinct route in the selected class, popular first */}
+      <div style={{ marginBottom: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {classRoutes.map((r, i) => (
           <button
-            key={f}
-            onClick={() => setClassFilter(f)}
+            key={r.key}
+            onClick={() => setRouteKey(r.key)}
             style={{
-              marginRight: 6,
               padding: "4px 10px",
-              fontWeight: classFilter === f ? "bold" : "normal",
-              border: classFilter === f ? "2px solid #333" : "1px solid #ccc",
+              fontSize: "0.9em",
+              fontWeight: routeKey === r.key ? "bold" : "normal",
+              border: routeKey === r.key ? "2px solid #e41a1c" : "1px solid #ccc",
+              borderRadius: 4,
               cursor: "pointer",
             }}
           >
-            {f}
+            Route {i + 1}
+            {i === 0 ? " ★" : ""}{" "}
+            <span style={{ color: "#777", fontWeight: "normal" }}>
+              · {r.traces} src{r.cls === "unknown" ? " · class ?" : ""}
+            </span>
           </button>
         ))}
       </div>
-      <RoutePanel
-        centreId={centreId}
-        geojson={geojson}
-        classFilter={classFilter}
-        center={center}
-      />
+      <RoutePanel centreId={centreId} geojson={geojson} route={selected} center={center} />
     </div>
   );
 }
