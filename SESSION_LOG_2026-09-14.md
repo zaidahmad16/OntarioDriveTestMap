@@ -59,6 +59,23 @@ indistinguishable from "there are no centres," the exact trap already
 fixed in `TraceList`/`MapView`. **Fix:** added `.catch` + a visible error
 message.
 
+### 5. `db.query()` could poison the connection pool on any error
+psycopg2 opens an implicit transaction on first `execute` and `query()`
+never ended it. On any error (a transient blip to the Railway public
+proxy is the realistic case) the connection went back to the
+`SimpleConnectionPool` with an *aborted* transaction, never rolled back —
+so every later request reusing it failed with "current transaction is
+aborted…" until a process restart. **Fix:** commit after a successful
+read (no idle-in-transaction) and roll back on error in both `query()`
+and `execute()`. Proven: 13 deliberate query errors in a row, then a
+normal query still returns all 4 centres.
+
+### 6. `/centres/{id}/map` fired an N+1 query for steps
+One `route_line_steps` query per route line — 20+ round trips over the
+public DB proxy for one map load. **Fix:** a single JOIN query keyed by
+centre, grouped in Python. Output verified byte-identical to the per-line
+version across all centres.
+
 ### 4. `TraceDetail` — no error handling + a latent crash
 `getTrace()` had no `.catch` (a failed fetch hangs on "Loading…"
 forever), and `w.lat.toFixed(5)` would throw and blank the whole detail
