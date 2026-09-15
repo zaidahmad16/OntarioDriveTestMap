@@ -42,8 +42,83 @@ const REAL_COLOR = "#e41a1c";
 // tags rather than the line itself.
 const PREDICTED_COLOR = "#984ea3";
 
+// A route line's road geometry comes from OSRM. When two consecutive
+// junctions sit on disconnected pieces of the road graph, OSRM still
+// answers "Ok" but returns a straight beeline for that leg -- a fake
+// straight segment across whatever is between them (confirmed on the
+// Walkley airport routes: an 778 m jump straight across greenspace).
+// Drawn as part of the solid confirmed line it silently asserts a road
+// that does not exist. GAP_THRESHOLD_M is set above the largest real
+// sparse-road stretch in the data (~383 m) so only true beelines split.
+const GAP_THRESHOLD_M = 400;
+const GAP_COLOR = "#7f8c8d";
+
+function haversine(a, b) {
+  // a, b are [lon, lat]
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b[1] - a[1]);
+  const dLon = toRad(b[0] - a[0]);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Split one route_line feature at any beeline gap: the real road pieces
+// come back as route_line features (styled normally), and each gap comes
+// back as its own `route_gap` feature so it renders honestly (dashed,
+// gray, labeled) instead of masquerading as confirmed road. Features
+// without a gap pass straight through untouched.
+function splitAtGaps(feature) {
+  if (
+    feature.properties.kind !== "route_line" ||
+    feature.geometry.type !== "LineString"
+  ) {
+    return [feature];
+  }
+  const coords = feature.geometry.coordinates;
+  const pieces = [[]];
+  const gaps = [];
+  for (let i = 0; i < coords.length; i++) {
+    if (i > 0) {
+      const d = haversine(coords[i - 1], coords[i]);
+      if (d > GAP_THRESHOLD_M) {
+        gaps.push({ from: coords[i - 1], to: coords[i], dist: d });
+        pieces.push([]); // start a new contiguous piece after the gap
+      }
+    }
+    pieces[pieces.length - 1].push(coords[i]);
+  }
+  if (!gaps.length) return [feature];
+
+  const out = pieces
+    .filter((pc) => pc.length >= 2)
+    .map((pc) => ({
+      ...feature,
+      geometry: { type: "LineString", coordinates: pc },
+    }));
+  gaps.forEach((g) => {
+    out.push({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [g.from, g.to] },
+      properties: {
+        ...feature.properties,
+        kind: "route_gap",
+        gap_m: Math.round(g.dist),
+      },
+    });
+  });
+  return out;
+}
+
 function routeLineStyle(feature) {
   const p = feature.properties;
+  if (p.kind === "route_gap") {
+    // Not a road: a straight, unrouted jump. Dashed + gray so it never
+    // reads as confirmed driven geometry.
+    return { color: GAP_COLOR, weight: 3, dashArray: "4, 8", opacity: 0.9 };
+  }
   if (p.kind !== "route_line") return {};
   // Confirmed, below-threshold, and predicted all render the same solid
   // red line now -- see onEachFeature for how predicted stays labeled.
@@ -63,6 +138,16 @@ function pointToLayer(feature, latlng) {
 
 function onEachFeature(feature, layer) {
   const p = feature.properties;
+  if (p.kind === "route_gap") {
+    layer.bindPopup(
+      `<b style="color:#7f8c8d">⚠ Unrouted gap -- not a road</b><br/>` +
+        `The route data jumps ~${p.gap_m} m straight here: the two ends sit ` +
+        `on road segments that don't connect in the map data, so this ` +
+        `stretch is a straight line across the gap, <b>not a driven road</b>.<br/>` +
+        `Family ${p.family}. The road pieces on either side are real.`
+    );
+    return;
+  }
   if (p.kind === "segment") {
     layer.bindPopup(
       `<b>${p.streets.join(" × ")}</b><br/>` +
@@ -107,7 +192,13 @@ function onEachFeature(feature, layer) {
 // at all, so a class filter has nothing to say about them one way or
 // the other. They stay visible regardless of which button is active.
 function matchesFilter(feature, filter) {
-  if (feature.properties.kind !== "route_line") return true;
+  // route_gap features carry their parent line's class, so filter them
+  // the same way -- otherwise a gap could show while its route is hidden.
+  if (
+    feature.properties.kind !== "route_line" &&
+    feature.properties.kind !== "route_gap"
+  )
+    return true;
   // A route_line whose dominant class couldn't be determined (test_class
   // null) is still REAL, validated geometry -- 4 of Walkley's 8 confirmed
   // consensus routes are unlabeled this way. It has no class to contradict
@@ -278,12 +369,40 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
     ...geojson,
     features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
   };
+  // For the MAP layer only, split route lines at beeline gaps so the fake
+  // straight stretches render as dashed "unrouted gap" instead of solid
+  // confirmed road. The InstructionsTable keeps the un-split lines below,
+  // so a line's OSRM steps aren't duplicated across its pieces.
+  const mapData = {
+    ...geojson,
+    features: filtered.features.flatMap(splitAtGaps),
+  };
   const routeLines = filtered.features.filter((f) => f.properties.kind === "route_line");
   const predictedCount = routeLines.filter((f) => f.properties.predicted).length;
   const hasPredicted = predictedCount > 0;
+  const gapCount = mapData.features.filter((f) => f.properties.kind === "route_gap").length;
 
   return (
     <div>
+      {gapCount > 0 && (
+        <p
+          style={{
+            background: "#f0f1f2",
+            border: "1px solid #7f8c8d",
+            color: "#4d5656",
+            padding: "6px 10px",
+            borderRadius: 4,
+            fontSize: "0.85em",
+            marginBottom: 8,
+          }}
+        >
+          {gapCount} <b>unrouted gap{gapCount === 1 ? "" : "s"}</b> shown as{" "}
+          <span style={{ color: "#7f8c8d", fontWeight: "bold" }}>dashed gray</span>:
+          the route data jumps in a straight line where the two ends don't connect
+          on the road map. The road pieces on either side are real; the dashed jump
+          is not a driven road.
+        </p>
+      )}
       {hasPredicted && (
         <p
           style={{
@@ -319,12 +438,12 @@ function RoutePanel({ centreId, geojson, classFilter, center }) {
           </Tooltip>
         </Marker>
         <GeoJSON
-          data={filtered}
+          data={mapData}
           style={routeLineStyle}
           pointToLayer={pointToLayer}
           onEachFeature={onEachFeature}
         />
-        <FitToData geojson={filtered} centreLatLng={center} />
+        <FitToData geojson={mapData} centreLatLng={center} />
       </MapContainer>
       <InstructionsTable
         lines={filtered.features.filter((f) => f.properties.kind === "route_line")}

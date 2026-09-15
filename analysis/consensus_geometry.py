@@ -74,6 +74,23 @@ def haversine(a, b):
     return 2 * 6371000 * math.asin(math.sqrt(h))
 
 
+# Above the largest real sparse-road stretch seen in the data (~383 m),
+# so only genuine OSRM beelines trip it. Kept in sync with the frontend's
+# GAP_THRESHOLD_M in MapView.jsx (which draws these gaps as dashed).
+GAP_WARN_M = 400
+
+
+def _max_coord_gap(coords):
+    """Largest straight jump between consecutive [lon, lat] vertices, in
+    metres. Real OSRM road geometry is dense (<~50 m/step); a large value
+    means an unrouted beeline leg slipped into the geometry."""
+    biggest = 0.0
+    for i in range(1, len(coords)):
+        p, q = coords[i - 1], coords[i]
+        biggest = max(biggest, haversine((p[1], p[0]), (q[1], q[0])))
+    return biggest
+
+
 class Graph:
     def __init__(self, db):
         self.con = sqlite3.connect(db)
@@ -333,6 +350,20 @@ def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
         geom = {"type": "LineString",
                 "coordinates": [[p["lon"], p["lat"]] for p in pts]}
 
+    # OSRM answers "Ok" even when a leg is unroutable -- it returns a
+    # straight beeline (2 points, distance == straight-line distance) for
+    # that stretch. Left as-is that fake straight is indistinguishable
+    # from real road inside a *confirmed* route (found on Walkley's airport
+    # routes: a 778 m jump straight across greenspace). Detect the largest
+    # such gap and record it so it isn't silently presented as driven road
+    # -- the frontend renders any gap over GAP_THRESHOLD as a dashed
+    # "unrouted" segment rather than solid confirmed geometry.
+    gap_m = _max_coord_gap(geom.get("coordinates", []))
+    if gap_m > GAP_WARN_M:
+        print(f"     ! run {ri}: {gap_m:.0f}m unrouted gap in geometry "
+              f"(OSRM beelined an unroutable junction pair) -- flagged, not "
+              f"drawn as confirmed road")
+
     return {
         "type": "Feature",
         "geometry": geom,
@@ -343,6 +374,7 @@ def build_route_feature(seg, run, ri, fid, traces, authors, test_class,
             "test_class": test_class, "mixed_classes": mixed_classes,
             "below_threshold": below_threshold,
             "distance_m": round(dist) if dist else None,
+            "gap_m": round(gap_m) if gap_m > GAP_WARN_M else None,
             "segments": props,
             "min_authors": min(p["authors"] for p in props),
             "max_authors": max(p["authors"] for p in props),
