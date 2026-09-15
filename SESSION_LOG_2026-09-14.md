@@ -185,16 +185,26 @@ Joseph…), but weak — weight ≤ 1.2, mostly single-author, video-only, and
 never joined a route family. They were **dragging the map's auto-fit
 bounds out** until the routes were a tiny knot mid-map. Fixed: `FitToData`
 frames on routes (+ centre), not on scattered points; `pointToLayer` fades
-junctions by weight. They're likely spurious/misattributed video content
-worth a review (ties to Canotek below).
+junctions by weight. Refined after the OSM check: these sit on REAL
+east-Ottawa/Orleans roads (St Joseph Blvd is a primary 405 m from the
+centre), so they're genuine Canotek-area content that's simply weak
+(single-author, video-only) and never clustered — a corroboration-review
+item, not cross-city misattribution.
 
-### Canotek G/G2 identical speeds — data finding, no bug
+### Canotek G/G2 identical speeds — a source-data collection gap (confirmed)
 Traces label cleanly (12 G, 9 G2, 2 unknown). Both classes' routes run the
 same arterials — Ogilvie (60), Shefford (50), Montréal Rd (50) — G adds
-only Blair Rd (50). The centre sits in a business park where everything is
-50–60 km/h; **no highway leg was captured for the G route**. The
-distinction is by route shape, not road type. Source-data coverage
-question, your domain.
+only Blair Rd (50). Chased it to the source, fully fact-checked:
+- **Zero** of the 34 distinct street names across all Canotek trace turns
+  mention any highway (no 174, 417, Queensway, ramp, merge, expressway).
+- Yet the OSM extract shows **Regional Road 174 — a motorway, maxspeed
+  100 km/h — 311 m from the Canotek centre** (plus St Joseph Blvd primary
+  70 @ 405 m). A real Canotek G test almost certainly uses Hwy 174.
+So the G highway leg is a **collection gap**, not a pipeline drop or a
+labelling bug: the highway is right there, but no collected Reddit/video
+trace ever described it. No honest code fix exists (inventing a highway
+leg would violate the project's provenance rule) — it needs a new Canotek
+G trace that captures the Hwy 174 portion. Your data-collection call.
 
 ### 4 NULL-class Walkley routes — confirmed correctly NULL, no bug
 Ran the overlap math locally (efficiently, vs the timeout-prone full
