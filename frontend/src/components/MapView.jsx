@@ -138,12 +138,18 @@ function routeLineStyle(feature) {
 
 function pointToLayer(feature, latlng) {
   const authors = feature.properties.authors || 1;
+  // Fade weakly-supported junctions so they read as secondary to the
+  // strongly-corroborated ones on the actual routes -- a single-author,
+  // weight-0.3 junction 6 km out shouldn't look as solid as a
+  // multi-author junction on a confirmed route.
+  const w = feature.properties.weight ?? 1;
+  const fillOpacity = Math.max(0.2, Math.min(0.7, 0.2 + w * 0.35));
   return L.circleMarker(latlng, {
     radius: 4 + Math.min(authors, 6),
     fillColor: "#3388ff",
     color: "#3388ff",
     weight: 1,
-    fillOpacity: 0.6,
+    fillOpacity,
   });
 }
 
@@ -226,11 +232,24 @@ function matchesFilter(feature, filter) {
 // Real routes read as "finished" when the map opens already looking at
 // them, not when a user has to pan/zoom to find a thin line somewhere
 // in a wide default view.
+//
+// Frame on the ROUTES (+ the centre), not on every consensus point:
+// some scored junctions are weak, single-author, far-flung outliers
+// (real Orleans/outer-Ottawa junctions 4-7 km out that never joined a
+// route). Including them in the bounds zoomed the whole map out until
+// the actual routes were a tiny knot in the middle. The outlier dots
+// still render -- they just don't get to hijack the opening view. Only
+// when a centre has no routes at all (Smiths Falls) do we fall back to
+// framing on the points so there's still something to look at.
 function FitToData({ geojson, centreLatLng }) {
   const map = useMap();
   useEffect(() => {
     if (!geojson || !geojson.features.length) return;
-    const bounds = L.geoJSON(geojson).getBounds();
+    const routeish = geojson.features.filter(
+      (f) => f.properties.kind === "route_line" || f.properties.kind === "route_gap"
+    );
+    const framingSet = routeish.length ? routeish : geojson.features;
+    const bounds = L.geoJSON({ type: "FeatureCollection", features: framingSet }).getBounds();
     if (centreLatLng) bounds.extend(centreLatLng); // never crop the centre out of view
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [30, 30] });
