@@ -106,11 +106,18 @@ and guard the `.toFixed` (renders "(unresolved)" instead of crashing).
 
 ## Open observations for the pipeline owner (reported, not touched)
 
-- **778 m gaps** inside two Walkley confirmed routes (`fam3/run0`,
-  `fam3/run1`, both `consensus_geometry`) — a straight ~0.8 km jump
-  between consecutive vertices that may draw across non-road space.
-  Same class of issue as the 2026-09-13 "fabricated straight-line
-  connections" note.
+- **778 m gap** inside two Walkley confirmed routes (`fam3/run0`
+  vertices 279→280, and `fam3/run1` — the same physical segment,
+  reversed; both `consensus_geometry`). Rendered and inspected on OSM
+  tiles: it is a single straight vertex-to-vertex jump from Hunt Club Rd
+  down to the Uplands/NRC area that **cuts across greenspace / airport-
+  buffer land, not a road** (A=45.33453,−75.65976 → B=45.34098,−75.66360).
+  A road-snapped segment would have many curve-following vertices; one
+  778 m straight jump is by definition unsnapped. Same class as the
+  2026-09-13 "fabricated straight-line connections" note — but here it's
+  inside a *confirmed* consensus route, not a predicted bridge, so a
+  G-test viewer sees a confirmed route slice straight across a green
+  area. Worth chasing in `consensus_geometry.py`'s assembly.
 - **Degenerate predicted bridges**: a few 2-point, ~0 m predicted lines
   at Walkley (`fam0/run0`, `fam2/run1`, `fam2/run2`) — connect a point to
   (nearly) itself; render as nothing meaningful.
