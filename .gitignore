@@ -15,3 +15,6 @@ geometry/snapped.json
 *.log
 node_modules/
 dist/
+
+# Reversible backups written by cleanup_degenerate_bridges.py
+degenerate_bridges_backup_*.json
