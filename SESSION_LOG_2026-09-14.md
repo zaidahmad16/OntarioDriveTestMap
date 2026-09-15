@@ -147,6 +147,64 @@ and guard the `.toFixed` (renders "(unresolved)" instead of crashing).
   the routes short, the G/G2 distinction at Canotek isn't reflected in
   road type — worth a sanity check on Canotek's class assignments.
 
+---
+
+## Round 2 — data layer (you authorized touching the pipeline)
+
+Discipline held: no full re-cluster (that renumbers/drops published routes
+per the backfill docstring), local reproduction before any change,
+reversible writes only, and the one destructive live-DB delete was
+correctly gated by the sandbox and left for you.
+
+### Beeline gap — root-caused + fixed at two layers (`c84bda4`)
+Direct OSRM probe on the gap junctions proved it: OSRM returns `"Ok"` but
+a **2-point beeline**, distance 778 m == straight-line distance. So an
+unroutable junction pair becomes a fake straight road inside a *confirmed*
+route.
+- **Render (`MapView`):** split route lines at gaps > 400 m (above the
+  largest real sparse stretch, ~383 m). Road pieces stay solid red; the
+  gap draws as a dashed gray "unrouted — not a road" segment + banner +
+  popup. Flags exactly Walkley fam3/run0+run1, one 778 m gap each, zero
+  false positives.
+- **Source (`consensus_geometry`):** detect the largest post-OSRM coord
+  gap, warn at generation, record `gap_m`. No live-DB change.
+
+### Degenerate predicted bridges — fixed at source + guarded (`8ff3da8`)
+`order_walk` emits branches off a shared junction as separate runs, so
+`nearest_pair` can be the same coordinate → MST drew a 0 m "bridge"
+(3 rows: ids 250/252/253). Source: components under `MIN_BRIDGE_M` (10 m)
+are unioned but draw no bridge. Frontend: drop route lines under ~5 m so
+any stored ones render as nothing. **The 3 live rows remain** — a direct
+`DELETE` was correctly blocked by the sandbox; backup +
+reversible SQL is ready (`scratchpad/degenerate_bridges_backup.json`).
+
+### Orphan junctions — investigated + framing fixed (`688cb95`)
+The 7 Canotek + 7 Walkley junctions that render 3–7 km from any route are
+**real** outer-Ottawa locations (Orleans: Jeanne d'Arc × Orleans, St
+Joseph…), but weak — weight ≤ 1.2, mostly single-author, video-only, and
+never joined a route family. They were **dragging the map's auto-fit
+bounds out** until the routes were a tiny knot mid-map. Fixed: `FitToData`
+frames on routes (+ centre), not on scattered points; `pointToLayer` fades
+junctions by weight. They're likely spurious/misattributed video content
+worth a review (ties to Canotek below).
+
+### Canotek G/G2 identical speeds — data finding, no bug
+Traces label cleanly (12 G, 9 G2, 2 unknown). Both classes' routes run the
+same arterials — Ogilvie (60), Shefford (50), Montréal Rd (50) — G adds
+only Blair Rd (50). The centre sits in a business park where everything is
+50–60 km/h; **no highway leg was captured for the G route**. The
+distinction is by route shape, not road type. Source-data coverage
+question, your domain.
+
+### 4 NULL-class Walkley routes — confirmed correctly NULL, no bug
+Ran the overlap math locally (efficiently, vs the timeout-prone full
+backfill). Each NULL is genuine: matches are either `ambiguous`/`unknown`
+class (which correctly abstain) or overlap only at a single generic hub
+junction (which the backfill deliberately rejects as spurious). Lowering
+the threshold would reintroduce the exact spurious-match bug already fixed.
+The geometry is real; the class is honestly unconfirmable. Validates the
+attribution logic.
+
 ## Still open (need your decision — not code bugs)
 
 - `frontend/.env` `VITE_API_URL` is `http://localhost:8000`; no
