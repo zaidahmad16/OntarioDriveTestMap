@@ -226,3 +226,37 @@ attribution logic.
   any route.
 - Fresh Google sign-in popup still not exercised end-to-end (can't
   automate the Google consent screen).
+
+---
+
+## Round 3 — 2026-09-15: route quality (class-blind clustering) + one-route-at-a-time
+
+Acting on live-app feedback. Root cause of "G and G2 look the same", "doesn't
+look like one route", and the 52-min/30-min durations: `families()` clusters
+on shared streets and is **class-blind** — a G and a G2 route that share
+arterials merge into one family shown under both filters — and the app drew
+every family + every predicted fragment of a class at once, summing a nonsense
+duration across unrelated routes.
+
+- **`class_families()` (consensus_geometry):** cluster within confirmed class;
+  attach ambiguous/unknown traces to the nearest class-family without changing
+  its class; thin families skip the consensus threshold so single-source routes
+  still surface. Validated: Walkley G2 → **3 families** (popular = 11 traces),
+  Canotek G2 2 / G 3, **Smiths Falls (was 0 routes) → a real G2 core** (2
+  authors, 10 segments, one connected loop). Committed `fbe7054`.
+- **MapView route-selector:** group route_lines by (test_class, family);
+  [G]/[G2] picks class, then a button per distinct route sorted by trace-count
+  (most-corroborated first = default, starred); map + instructions + duration
+  show only the selected route. Committed `9b0ec1f`.
+
+**Not done autonomously — the live-DB regeneration.** `migrate_to_postgres`
+loads route_lines but not the turn-by-turn steps (those come from the
+enhancement scripts), and Canotek consensus-only is sparse (3 lines) without
+the bridge/connect/recover pass — a naive reload would strip directions and
+thin Canotek. The enhancement scripts still need the same class_families swap.
+Full route-data backup taken (`route_data_backup_*.json`, gitignored). The
+regen is left as a controlled step to run with the pipeline's full knowledge.
+
+OSM/OSRM is not the cause of any wrong route; it's demo-grade for production
+(swap tiles → MapTiler/Stadia, routing → self-hosted OSRM/Valhalla). Notion
+logs now carry HH:MM timestamps per request.
