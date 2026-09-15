@@ -112,6 +112,17 @@ function splitAtGaps(feature) {
   return out;
 }
 
+// A route line that draws nothing: fewer than 2 distinct points, or a
+// total length under ~5 m (a bridge whose two ends coincide).
+function isDegenerateRouteLine(feature) {
+  if (feature.properties.kind !== "route_line") return false;
+  const c = feature.geometry?.coordinates || [];
+  if (c.length < 2) return true;
+  let len = 0;
+  for (let i = 1; i < c.length; i++) len += haversine(c[i - 1], c[i]);
+  return len < 5;
+}
+
 function routeLineStyle(feature) {
   const p = feature.properties;
   if (p.kind === "route_gap") {
@@ -367,7 +378,13 @@ function InstructionsTable({ lines }) {
 function RoutePanel({ centreId, geojson, classFilter, center }) {
   const filtered = {
     ...geojson,
-    features: geojson.features.filter((f) => matchesFilter(f, classFilter)),
+    features: geojson.features
+      .filter((f) => matchesFilter(f, classFilter))
+      // Drop zero-length route lines: an older predicted-bridge bug wrote a
+      // few 2-point lines whose endpoints coincide (a bridge from a point to
+      // itself). They draw nothing but still inflate counts. The generator
+      // no longer creates them; this guards any that remain in stored data.
+      .filter((f) => !isDegenerateRouteLine(f)),
   };
   // For the MAP layer only, split route lines at beeline gaps so the fake
   // straight stretches render as dashed "unrouted gap" instead of solid

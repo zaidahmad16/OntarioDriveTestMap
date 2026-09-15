@@ -150,6 +150,15 @@ def nearest_pair(seg, comp_a, comp_b):
     return best
 
 
+# Two components whose nearest points are closer than this already touch
+# on the map (order_walk emits branches off a shared junction as separate
+# runs, so their nearest points can be the SAME coordinate). "Bridging"
+# them draws a zero-length line -- a point to itself -- which renders as
+# nothing and just inflates the predicted-route count. Union them without
+# emitting a drawn bridge.
+MIN_BRIDGE_M = 10.0
+
+
 def mst_bridges(seg, components, max_distance):
     """Minimum spanning tree over components, edge weight = nearest real
     distance between any two of their points. Refuses any edge over
@@ -177,6 +186,10 @@ def mst_bridges(seg, components, max_distance):
     for d, i, j, na, nb in edges:
         ri, rj = find(i), find(j)
         if ri == rj:
+            continue
+        if d < MIN_BRIDGE_M:
+            # already touching -- connect them but draw nothing
+            parent[ri] = rj
             continue
         if d > max_distance:
             skipped.append((d, i, j))
