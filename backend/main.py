@@ -135,13 +135,33 @@ def get_map(centre_id: str, user=Depends(require_user)):
         (centre_id,),
     )
 
+    # One query for every line's steps instead of one query per line -- a
+    # centre can have 20+ route_lines, and this endpoint runs over the
+    # public Railway proxy where each round trip costs real latency.
+    step_rows = query(
+        "SELECT s.route_line_id, s.instruction, s.distance_m, s.duration_s, "
+        "s.traffic_control, s.speed_limit "
+        "FROM route_line_steps s "
+        "JOIN route_lines rl ON rl.id = s.route_line_id "
+        "WHERE rl.centre_id = %s "
+        "ORDER BY s.route_line_id, s.step_order",
+        (centre_id,),
+    )
+    steps_by_line = {}
+    for r in step_rows:
+        steps_by_line.setdefault(r["route_line_id"], []).append(
+            {
+                "instruction": r["instruction"],
+                "distance_m": r["distance_m"],
+                "duration_s": r["duration_s"],
+                "traffic_control": r["traffic_control"],
+                "speed_limit": r["speed_limit"],
+            }
+        )
+
     features = []
     for line in lines:
-        steps = query(
-            "SELECT instruction, distance_m, duration_s, traffic_control, speed_limit "
-            "FROM route_line_steps WHERE route_line_id = %s ORDER BY step_order",
-            (line["id"],),
-        )
+        steps = steps_by_line.get(line["id"], [])
         features.append(
             {
                 "type": "Feature",
