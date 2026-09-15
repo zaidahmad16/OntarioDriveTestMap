@@ -44,7 +44,17 @@ def query(sql, params=None, one=False):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(sql, params or ())
             rows = cur.fetchall()
-            return (rows[0] if rows else None) if one else rows
+            result = (rows[0] if rows else None) if one else rows
+        # End the transaction cleanly. psycopg2 opens one implicitly on the
+        # first execute; without this the pooled connection goes back
+        # idle-in-transaction, and on ANY error below it would go back with
+        # an *aborted* transaction and poison every later request that
+        # reuses it ("current transaction is aborted...") until a restart.
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         put_conn(conn)
 
@@ -55,9 +65,13 @@ def execute(sql, params=None):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(sql, params or ())
-            conn.commit()
-            if cur.description:
-                return cur.fetchall()
-            return None
+            result = cur.fetchall() if cur.description else None
+        conn.commit()
+        return result
+    except Exception:
+        # Roll back so a failed write doesn't return an aborted-transaction
+        # connection to the pool (see the note in query()).
+        conn.rollback()
+        raise
     finally:
         put_conn(conn)
