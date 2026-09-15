@@ -18,3 +18,4 @@ dist/
 
 # Reversible backups written by cleanup_degenerate_bridges.py
 degenerate_bridges_backup_*.json
+route_data_backup_*.json
