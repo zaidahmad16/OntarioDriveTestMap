@@ -241,6 +241,59 @@ def families(T, g, min_size=2):
     return out
 
 
+def class_families(T, g, min_size=2, assign_overlap=0.34):
+    """Cluster WITHIN test_class, so no family ever mixes G and G2.
+
+    The plain families() above clusters purely on shared streets and is
+    class-blind: a G route and a G2 route that share the same arterials
+    near the centre get merged into one family, which then renders under
+    both class filters and reads as "G and G2 are the same route." A
+    driving test is one class; a family must be too.
+
+    Only confirmed G / G2 traces seed families. "ambiguous" (matched both
+    class keyword patterns) and "unknown" traces don't get a class vote --
+    that is exactly what glued the classes together before -- so each is
+    instead attached to the single best-matching class-family by segment
+    overlap (>= assign_overlap of the trace's own segments), enriching its
+    support without changing its class, or dropped if it matches nothing.
+
+    Returns {(class, local_id): [traces]} -- family numbering restarts per
+    class, and (centre, class, family) is the real route key downstream.
+    """
+    labeled = defaultdict(list)
+    unlabeled = []
+    for t in T:
+        c = t.get("test_class")
+        if c in ("G", "G2"):
+            labeled[c].append(t)
+        else:
+            unlabeled.append(t)
+
+    fams = {}
+    for c, sub in labeled.items():
+        for lid, traces in families(sub, g, min_size).items():
+            if lid < 0:
+                continue  # HDBSCAN noise, not a route
+            fams[(c, lid)] = list(traces)
+
+    fam_segs = {k: set().union(*[set(trace_segments(t, g)) for t in v]) if v else set()
+                for k, v in fams.items()}
+    for t in unlabeled:
+        ts = set(trace_segments(t, g))
+        if not ts:
+            continue
+        best, best_score = None, 0.0
+        for k, segs in fam_segs.items():
+            if not segs:
+                continue
+            score = len(ts & segs) / len(ts)
+            if score > best_score:
+                best, best_score = k, score
+        if best is not None and best_score >= assign_overlap:
+            fams[best].append(t)
+    return fams
+
+
 def support(traces, g):
     """Segment -> evidence. Authors deduplicated per source kind."""
     seg = defaultdict(lambda: {"video": set(), "text": set(), "w": {},
@@ -593,28 +646,33 @@ def main():
             print(f"{len(overrides)} segment correction(s) applied: "
                   f"{', '.join('×'.join(k) for k in overrides)}\n")
 
-    fam = families(T, g, 2)
-    real = {k: v for k, v in fam.items()
-            if k >= 0 and len(v) >= args.min_family}
-    print(f"{len(real)} route families "
-          f"(+{len(fam.get(-1, []))} unclustered)\n")
+    # Cluster within class so no family mixes G and G2 (see class_families).
+    fams = class_families(T, g, min_size=2)
+    print(f"{len(fams)} class-coherent route families\n")
 
     feats = []
     published = set()
-    for fid in sorted(real):
-        traces = real[fid]
+    for (cls, fid) in sorted(fams, key=lambda k: (k[0], k[1])):
+        traces = fams[(cls, fid)]
         seg = support(traces, g)
         authors = len({t.get("author_hash") or t["source_id"] for t in traces})
 
-        test_class, mixed_classes, class_counts = class_vote(
-            t.get("test_class") for t in traces)
+        # Class is fixed by the family's confirmed members now, never voted
+        # across mixed classes -- so mixed_classes is structurally False.
+        test_class, mixed_classes = cls, False
 
+        # Consensus thresholding filters segments where sources DISAGREE.
+        # That only makes sense with enough sources to disagree: a family
+        # with fewer than --min-family traces has no consensus to take, so
+        # its route is that evidence's own path (every graph-valid segment
+        # it named). Bigger families still get the tuned threshold.
+        thin = len(traces) < args.min_family
         keep, dropped, corrected = [], 0, 0
         for k, v in seg.items():
             if k in overrides:
                 corrected += 1
                 continue
-            if sum(v["w"].values()) < args.threshold:
+            if not thin and sum(v["w"].values()) < args.threshold:
                 dropped += 1
                 continue
             keep.append(k)
@@ -622,14 +680,10 @@ def main():
 
         runs = order_walk(seg, keep)
         streets = sorted({s for k in keep for s in k})
-        print(f"── family {fid}: {len(traces)} traces, {authors} authors, "
-              f"{len(keep)} segments, {len(runs)} run(s)")
+        tag = " (thin: full path, no consensus filter)" if thin else ""
+        print(f"── {cls} family {fid}: {len(traces)} traces, {authors} authors, "
+              f"{len(keep)} segments, {len(runs)} run(s){tag}")
         print(f"     {', '.join(streets[:9])}")
-        if mixed_classes:
-            counts_str = ", ".join(f"{k}={v}" for k, v in sorted(class_counts.items()))
-            print(f"     ! mixed test_class among family {fid}'s traces "
-                  f"({counts_str}) -- publishing dominant class {test_class!r}, "
-                  f"data-quality issue, not silently resolved")
         if corrected:
             print(f"     {corrected} segment(s) removed by correction")
         if dropped:
