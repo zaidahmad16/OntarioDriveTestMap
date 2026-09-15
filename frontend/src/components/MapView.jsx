@@ -108,6 +108,14 @@ function onEachFeature(feature, layer) {
 // the other. They stay visible regardless of which button is active.
 function matchesFilter(feature, filter) {
   if (feature.properties.kind !== "route_line") return true;
+  // A route_line whose dominant class couldn't be determined (test_class
+  // null) is still REAL, validated geometry -- 4 of Walkley's 8 confirmed
+  // consensus routes are unlabeled this way. It has no class to contradict
+  // either view, so show it under both buttons rather than hiding real
+  // route data off the map entirely (its popup already says "class
+  // unknown"). Hiding it was a latent bug: with only G/G2 buttons, a
+  // null-class line matched neither and never rendered.
+  if (feature.properties.test_class == null) return true;
   return feature.properties.test_class === filter;
 }
 

@@ -76,7 +76,10 @@ def list_centres():
         SELECT c.id, c.name,
                COUNT(DISTINCT t.id)  AS trace_count,
                COUNT(DISTINCT cs.id) AS segment_count,
-               COUNT(DISTINCT rl.id) AS route_line_count
+               COUNT(DISTINCT rl.id) AS route_line_count,
+               COUNT(DISTINCT rl.id) FILTER (
+                   WHERE NOT rl.predicted AND NOT rl.below_threshold
+               ) AS confirmed_route_line_count
         FROM centres c
         LEFT JOIN traces t             ON t.centre_id = c.id
         LEFT JOIN consensus_segments cs ON cs.centre_id = c.id
@@ -94,7 +97,10 @@ def get_centre(centre_id: str):
         SELECT c.id, c.name,
                COUNT(DISTINCT t.id)  AS trace_count,
                COUNT(DISTINCT cs.id) AS segment_count,
-               COUNT(DISTINCT rl.id) AS route_line_count
+               COUNT(DISTINCT rl.id) AS route_line_count,
+               COUNT(DISTINCT rl.id) FILTER (
+                   WHERE NOT rl.predicted AND NOT rl.below_threshold
+               ) AS confirmed_route_line_count
         FROM centres c
         LEFT JOIN traces t             ON t.centre_id = c.id
         LEFT JOIN consensus_segments cs ON cs.centre_id = c.id
