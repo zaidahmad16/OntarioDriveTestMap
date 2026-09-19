@@ -593,8 +593,9 @@ export default function MapView({ centreId }) {
           >
             Route {i + 1}
             {i === 0 ? " ★" : ""}{" "}
-            <span style={{ color: "#777", fontWeight: "normal" }}>
-              · {r.traces} src{r.cls === "unknown" ? " · class ?" : ""}
+            <span style={{ color: r.manualVerified ? "#2a7" : "#777", fontWeight: "normal" }}>
+              · {r.manualVerified ? "✓ verified" : `${r.traces} src`}
+              {r.cls === "unknown" ? " · class ?" : ""}
             </span>
           </button>
         ))}
