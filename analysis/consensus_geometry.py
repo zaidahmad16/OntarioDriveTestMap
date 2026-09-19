@@ -140,14 +140,56 @@ class Graph:
                 best = (d, r["kind"])
         return best[1] if best else None
 
-    def street_maxspeed(self, name):
+    def street_maxspeed(self, name, lat=None, lon=None):
         """Real posted speed limit for a named street, or None -- most
         streets in this extract simply aren't tagged (~4.7% of ways
         checked directly against the Ottawa extract), so None is the
-        common, honest case, not a bug."""
+        common, honest case, not a bug.
+
+        A long arterial can genuinely have more than one real speed zone
+        (Walkley Road: 50 near the DriveTest centre, 80 toward the
+        airport) -- picking whichever tagged way SQLite returns first
+        for the name (the old behaviour, no `lat`/`lon`) can attach the
+        WRONG zone to a given point. Confirmed live: the owner saw 80
+        shown for a maneuver actually in the 50 zone. When a location is
+        given and way_maxspeed_loc has coordinates for the matching ways
+        (see backfill_maxspeed_location.py), the nearest one by real
+        distance wins instead of an arbitrary row order.
+
+        osm.db is province-wide (see MAX_JUMP_M elsewhere in this file
+        for the same class of bug in junction lookup): a common street
+        base name like "Davidson" matches completely unrelated real
+        streets near Ottawa AND near Smiths Falls, 50+ km apart. Without
+        a cap, "nearest of the candidates" still returns the closest
+        WRONG street when the real one just isn't tagged at all --
+        confirmed directly: Smiths Falls' real Davidson Street West has
+        no maxspeed tag, every candidate SQLite found was a different
+        Davidson elsewhere in the province, yet the nearest-picks-best
+        logic returned one anyway as if it were correct."""
+        MAX_SPEED_MATCH_M = 3000
         if not name:
             return None
         try:
+            if lat is not None and lon is not None:
+                best, best_d = None, None
+                for v in name_variants(name):
+                    rows = self.con.execute(
+                        "SELECT wm.maxspeed, l.lat, l.lon FROM streets s "
+                        "JOIN way_maxspeed wm ON wm.way_id = s.way_id "
+                        "JOIN way_maxspeed_loc l ON l.way_id = wm.way_id "
+                        "WHERE s.base = ? OR s.full = ?", (v, v),
+                    ).fetchall()
+                    for r in rows:
+                        d = haversine((lat, lon), (r["lat"], r["lon"]))
+                        if best_d is None or d < best_d:
+                            best, best_d = r["maxspeed"], d
+                if best is not None:
+                    # a located candidate exists for this name -- either
+                    # it's close enough to be the real match, or it's a
+                    # same-named street far away, in which case guessing
+                    # via the unlocated name-only fallback below would be
+                    # no better. Either way, don't fall through.
+                    return best if best_d <= MAX_SPEED_MATCH_M else None
             for v in name_variants(name):
                 r = self.con.execute(
                     "SELECT wm.maxspeed FROM streets s "
@@ -589,7 +631,7 @@ def extract_steps(osrm_response, g=None):
     for row in out:
         if g is not None and row["_lat"] is not None:
             row["traffic_control"] = g.nearby_traffic_control(row["_lat"], row["_lon"])
-            row["speed_limit"] = g.street_maxspeed(row["_name"])
+            row["speed_limit"] = g.street_maxspeed(row["_name"], row["_lat"], row["_lon"])
         else:
             row["traffic_control"] = None
             row["speed_limit"] = None

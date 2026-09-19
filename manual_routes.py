@@ -773,6 +773,7 @@ def align_transcript(lines, osrm_steps, streets):
 
     out = []
     si = 0
+    prev_street_i = None
     for line in lines:
         street_i = None
         # Look ahead a few entries, not just the next one -- OSRM merges
@@ -788,11 +789,23 @@ def align_transcript(lines, osrm_steps, streets):
                 si = j
                 break
         step = step_for_street.get(street_i)
+        # A stop sign / traffic light is a POINT fact about the specific
+        # junction where you turn onto a street -- true once, at the
+        # first line describing that turn. Showing it again on every
+        # "continue on X" line, or on a maneuver line describing
+        # something that happens mid-block (parking, a 3-point turn),
+        # says "you are at a stop sign" for a point on the road nowhere
+        # near one -- confirmed wrong by the owner (a midway parking
+        # maneuver on Fairlea Crescent showed "Stop sign"). Speed limit
+        # is a property of the road itself, not a point event, so it
+        # stays on every line covering that leg.
+        is_entry = step is not None and street_i != prev_street_i
+        prev_street_i = street_i
         out.append({
             "instruction": line,
             "distance_m": step["distance_m"] if step else None,
             "duration_s": step["duration_s"] if step else None,
-            "traffic_control": step["traffic_control"] if step else None,
+            "traffic_control": step["traffic_control"] if is_entry else None,
             "speed_limit": step["speed_limit"] if step else None,
         })
     return out
