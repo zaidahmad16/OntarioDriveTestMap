@@ -323,16 +323,21 @@ function InstructionsTable({ lines }) {
   );
   if (!steps.length) return null;
 
-  // manual_youtube routes' steps are the owner's own transcript lines
-  // (no per-step distance) -- fall back to the real, OSRM-measured
-  // per-line distance_m instead of summing to a false "0 m".
-  const stepsDistanceM = steps.reduce((a, r) => a + (r.distance_m || 0), 0);
-  const totalDistanceM = stepsDistanceM || lines.reduce((a, l) => a + (l.properties.distance_m || 0), 0);
+  // manual_youtube routes' steps are the owner's own transcript lines,
+  // each aligned to the real OSRM leg that covers the same street where
+  // possible -- but not every real leg gets a matching line (short
+  // unnamed connectors near the centre, mainly), so summing steps
+  // UNDERCOUNTS the true distance. Use the route's own real, whole-line
+  // distance_m instead so this total agrees with the summary above it.
+  const isManual = lines.some((l) => l.properties.source === "manual_youtube");
+  const totalDistanceM = isManual
+    ? lines.reduce((a, l) => a + (l.properties.distance_m || 0), 0)
+    : steps.reduce((a, r) => a + (r.distance_m || 0), 0);
   // duration only exists per real OSRM step -- when every step is the
   // owner's own transcript line (no per-step timing), there's no real
   // number to show. "0 s" would be a fabricated, misleading total for a
   // multi-km route; omit it instead.
-  const hasRealDuration = steps.some((r) => r.duration_s);
+  const hasRealDuration = !isManual && steps.some((r) => r.duration_s);
   const durationText = hasRealDuration ? `, ${sumDuration(steps)}` : "";
 
   return (

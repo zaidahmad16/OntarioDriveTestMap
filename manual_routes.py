@@ -155,12 +155,14 @@ ROUTES = {
     ],
 }
 
-# (a, b, lat, lon): pins a specific occurrence of a street pair to a real
-# coordinate instead of trusting "nearest candidate to current position" --
-# for pairs with more than one real junction (a crescent looping off a
-# road has two), nearest isn't always the one actually driven. Each entry
-# is consumed once, in order, so a pair appearing twice in one route can
-# have two different overrides.
+# (a, b, [(lat,lon), ...]): pins a specific occurrence of a street pair
+# to real coordinates instead of trusting "nearest candidate to current
+# position" -- for pairs with more than one real junction (a crescent
+# looping off a road has two), nearest isn't always the one actually
+# driven. All points are visited in order; only the LAST is treated as
+# "arrived at this junction" for later overrides/spurs to build from.
+# Each entry is consumed once, in order, so a pair appearing twice in
+# one route can have two different overrides.
 JUNCTION_OVERRIDES = {
     ("walkley", "G2", 0): [
         # owner, from the video: "at the 2nd stop sign [not the 1st],
@@ -169,7 +171,18 @@ JUNCTION_OVERRIDES = {
         # Heatherington and back on); the nearer one (~125m from the
         # Walkley/Heatherington turn) is the 1st, the farther one
         # (~320m) is the 2nd. Owner confirmed farther is correct.
-        ("Heatherington Rd", "Fairlea Cres", 45.3752609, -75.6435828),
+        ("Heatherington Rd", "Fairlea Cres", [(45.3752609, -75.6435828)]),
+        # The EXIT pair ("Fairlea Cres" -> "Heatherington Rd") needs to
+        # reach the OTHER real Heatherington junction (903993646, the
+        # "1st stop sign" node) -- but forcing just that endpoint wasn't
+        # enough: OSRM's shortest path between the two endpoints cut
+        # through Angela Private (a real, shorter road) instead of
+        # actually driving the crescent, confirmed by the owner from the
+        # rendered map. A real midpoint node from Fairlea Crescent's own
+        # OSM way (76729132), on the far side of the loop away from
+        # Angela Private, forces the actual shape before arriving.
+        ("Fairlea Cres", "Heatherington Rd",
+         [(45.3761284, -75.6408992), (45.3769754, -75.6443981)]),
     ],
 }
 
@@ -640,8 +653,9 @@ def resolve(centre, streets, g, overrides=None, pause=0.3):
                    if _base(o[0]) == _base(a) and _base(o[1]) == _base(b)), None)
         if ov:
             overrides.remove(ov)
-            last_key = _add(pts, last_key, ov[2], ov[3])
-            cur_lat, cur_lon = ov[2], ov[3]
+            for lat, lon in ov[2]:
+                last_key = _add(pts, last_key, lat, lon)
+            cur_lat, cur_lon = ov[2][-1]
             continue
         # 'a' is the street currently being driven on the leg into this
         # junction -- if it's a known spur/shortcut-prone street, force a
@@ -709,6 +723,66 @@ def label_missing_spurs(steps, forced_spurs, streets):
     return steps
 
 
+def _mentions(text, street):
+    """Fuzzy: does `text` mention `street`, allowing for the owner's own
+    spelling ("Tulon" for "Toulon", "Crederwood" for "Cedarwood")? Compares
+    the street's first significant word against every word in text with
+    SequenceMatcher rather than exact substring -- exact would miss every
+    transcript typo this whole pipeline exists to route around."""
+    import difflib
+    words = _base(street).split()
+    if not words:
+        return False
+    key = words[0]
+    return any(difflib.SequenceMatcher(None, w, key).ratio() > 0.75
+               for w in _norm(text).split())
+
+
+def align_transcript(lines, osrm_steps, streets):
+    """Keep the owner's own wording as the instruction text, but pull
+    the REAL per-leg distance/duration/traffic_control/speed_limit from
+    OSRM's own steps instead of leaving them blank -- owner asked for
+    both (authentic wording, real numbers), not one or the other.
+
+    Walks `streets` (the resolved, real sequence used for routing) and
+    `osrm_steps` in lockstep to know which OSRM step covers which street;
+    walks `lines` and `streets` in lockstep the same way to know which
+    transcript line is the FIRST to mention each street (repeat "continue
+    on X" lines for a street already entered stay blank -- the real
+    distance was already shown once, repeating it would be misleading,
+    not just redundant)."""
+    step_for_street = {}
+    sj = 0
+    for i, s in enumerate(streets):
+        while sj < len(osrm_steps) and not _mentions(osrm_steps[sj]["instruction"], s):
+            sj += 1
+        if sj < len(osrm_steps):
+            step_for_street[i] = osrm_steps[sj]
+            sj += 1
+
+    out = []
+    si = 0
+    claimed = set()
+    for line in lines:
+        street_i = None
+        for j in (si, si + 1):
+            if j < len(streets) and _mentions(line, streets[j]):
+                street_i = j
+                si = j
+                break
+        step = step_for_street.get(street_i) if street_i not in claimed else None
+        if street_i is not None:
+            claimed.add(street_i)
+        out.append({
+            "instruction": line,
+            "distance_m": step["distance_m"] if step else None,
+            "duration_s": step["duration_s"] if step else None,
+            "traffic_control": step["traffic_control"] if step else None,
+            "speed_limit": step["speed_limit"] if step else None,
+        })
+    return out
+
+
 def main():
     cg.load_known(DB_PATH)
     g = cg.Graph(DB_PATH)
@@ -748,11 +822,7 @@ def main():
 
         lines = TRANSCRIPT.get((centre, cls, idx))
         if lines:
-            steps = [
-                {"instruction": line, "distance_m": None, "duration_s": None,
-                 "traffic_control": None, "speed_limit": None}
-                for line in lines
-            ]
+            steps = align_transcript(lines, steps, streets)
 
         by_centre.setdefault(centre, []).append({
             "type": "Feature",
