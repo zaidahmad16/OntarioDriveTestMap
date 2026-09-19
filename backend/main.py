@@ -120,33 +120,44 @@ def get_centre(centre_id: str):
 def get_map(centre_id: str, user=Depends(require_user)):
     """One GeoJSON FeatureCollection: route lines (if any exist for this
     centre -- Smiths Falls currently has none, that's real, not a bug)
-    plus every scored junction as its own point feature."""
-    lines = query(
-        "SELECT id, family, run, trace_count, authors, distance_m, geometry, "
-        "test_class, mixed_classes, below_threshold, predicted, source "
-        "FROM route_lines WHERE centre_id = %s "
-        "ORDER BY family, run",
-        (centre_id,),
-    )
-    points = query(
-        "SELECT street_a, street_b, lat, lon, authors, weight, "
-        "video_count, text_count, last_seen "
-        "FROM consensus_segments WHERE centre_id = %s",
-        (centre_id,),
-    )
+    plus every scored junction as its own point feature.
 
-    # One query for every line's steps instead of one query per line -- a
-    # centre can have 20+ route_lines, and this endpoint runs over the
-    # public Railway proxy where each round trip costs real latency.
-    step_rows = query(
-        "SELECT s.route_line_id, s.instruction, s.distance_m, s.duration_s, "
-        "s.traffic_control, s.speed_limit "
-        "FROM route_line_steps s "
-        "JOIN route_lines rl ON rl.id = s.route_line_id "
-        "WHERE rl.centre_id = %s "
-        "ORDER BY s.route_line_id, s.step_order",
-        (centre_id,),
+    All three source queries (lines, points, steps) run as ONE round
+    trip via json_agg subqueries instead of three separate ones -- this
+    runs over the public Railway proxy where each round trip measured
+    ~300-460ms of pure connection/network overhead even for a handful of
+    rows (confirmed directly, not assumed), so three sequential queries
+    cost ~1.1s before any data even starts rendering. One round trip
+    cuts that to ~1 query's worth of latency."""
+    row = query(
+        """
+        SELECT
+          (SELECT COALESCE(json_agg(row_to_json(rl)), '[]') FROM (
+              SELECT id, family, run, trace_count, authors, distance_m,
+                     geometry, test_class, mixed_classes, below_threshold,
+                     predicted, source
+              FROM route_lines WHERE centre_id = %(cid)s
+              ORDER BY family, run
+          ) rl) AS lines,
+          (SELECT COALESCE(json_agg(row_to_json(cs)), '[]') FROM (
+              SELECT street_a, street_b, lat, lon, authors, weight,
+                     video_count, text_count, last_seen
+              FROM consensus_segments WHERE centre_id = %(cid)s
+          ) cs) AS points,
+          (SELECT COALESCE(json_agg(row_to_json(st)), '[]') FROM (
+              SELECT s.route_line_id, s.instruction, s.distance_m,
+                     s.duration_s, s.traffic_control, s.speed_limit
+              FROM route_line_steps s
+              JOIN route_lines rl ON rl.id = s.route_line_id
+              WHERE rl.centre_id = %(cid)s
+              ORDER BY s.route_line_id, s.step_order
+          ) st) AS steps
+        """,
+        {"cid": centre_id},
+        one=True,
     )
+    lines, points, step_rows = row["lines"], row["points"], row["steps"]
+
     steps_by_line = {}
     for r in step_rows:
         steps_by_line.setdefault(r["route_line_id"], []).append(
