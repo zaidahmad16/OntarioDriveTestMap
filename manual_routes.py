@@ -42,6 +42,12 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "analysis"))
 import consensus_geometry as cg  # noqa: E402
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "osm.db")
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "out", "manual")
 
