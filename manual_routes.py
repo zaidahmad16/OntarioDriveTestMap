@@ -518,7 +518,22 @@ def _norm(s):
     s = unicodedata.normalize("NFKD", s or "")
     s = "".join(c for c in s if not unicodedata.combining(c))
     words = re.sub(r"[^\w\s]", " ", s.lower()).split()
-    return " ".join(_EXPAND.get(w, w) for w in words)
+    out = []
+    for i, w in enumerate(words):
+        # "St" leading a name is "Saint" (St. Lawrence, St Paul, St
+        # Joseph -- all real entries in ROUTES/TRANSCRIPT), never the
+        # "Street" suffix -- that only ever trails. Unconditionally
+        # expanding "st"->"street" regardless of position corrupted
+        # _mentions()'s match key to the near-universal word "street"
+        # instead of the actual distinguishing name (found in review:
+        # _base("St. Lawrence St") was "street lawrence", keying on
+        # "street"). "st"/"st." can't mean Street in first position, so
+        # this split is unconditional, not a guess.
+        if i == 0 and w == "st":
+            out.append("saint")
+        else:
+            out.append(_EXPAND.get(w, w))
+    return " ".join(out)
 
 
 def _base(s):
@@ -548,11 +563,15 @@ for k, v in _SPUR_RAW.items():
 # silently absent (see manual_routes_report.md). A real point sampled from
 # the way's own geometry, inserted as an explicit waypoint, forces OSRM to
 # actually drive the street instead of shortcutting past it.
-SPUR_KEYS = {
-    "cedarwood drive", "uplands drive", "elmridge drive", "lerner way",
-    "grafton crescent", "regional road 174", "youville drive",
-    "ogilvie road", "eric hutcheson road", "old slys road",
-}
+#
+# Derived from the loaded spur_nodes.json (_SPUR above), NOT a separately
+# hand-maintained set -- this used to be its own hardcoded copy of
+# build_spur_nodes.py's TARGETS list, which the docstring there already
+# admitted had to be kept in sync by hand (found in review: unused
+# duplication is still a drift risk the moment something starts trusting
+# it). Reading straight from what build_spur_nodes.py actually produced
+# means the two can't disagree.
+SPUR_KEYS = {k for k in _SPUR if not k.startswith("ref:")}
 REF_KEYS = {"417": "ref:417"}
 
 
@@ -590,16 +609,11 @@ MAX_JUMP_M = 15_000
 
 
 def best_junction(g, a, b, near_lat, near_lon):
-    va, vb = cg.name_variants(a), cg.name_variants(b)
-    pa = ",".join("?" * len(va))
-    pb = ",".join("?" * len(vb))
-    rows = g.con.execute(f"""
-        SELECT j.node_id, j.lat, j.lon, j.kind FROM junctions j
-        WHERE j.node_id IN (SELECT node_id FROM junction_streets
-                            WHERE base IN ({pa}) OR full IN ({pa}))
-          AND j.node_id IN (SELECT node_id FROM junction_streets
-                            WHERE base IN ({pb}) OR full IN ({pb}))
-    """, (*va, *va, *vb, *vb)).fetchall()
+    # shared with Graph.junction() (analysis/consensus_geometry.py) --
+    # was a hand-copied duplicate of this same query, which could
+    # silently drift from the trace-clustering pipeline's own junction
+    # lookup (found in review).
+    rows = g.junction_candidates(a, b)
     if not rows:
         return None
     best, best_d = None, None
@@ -639,20 +653,25 @@ def resolve(centre, streets, g, overrides=None, pause=0.3):
         # occurrence be pinned to a real coordinate instead of guessed.
         ov = next((o for o in overrides
                    if _base(o[0]) == _base(a) and _base(o[1]) == _base(b)), None)
+        # 'a' is the street currently being driven on the leg into this
+        # junction -- if it's a known spur/shortcut-prone street, force a
+        # real point on it BEFORE the junction so OSRM can't bypass it.
+        # Checked BEFORE the override branch too (found in review: the
+        # override used to `continue` past this entirely, silently
+        # reintroducing the OSRM-shortcut bug for any future override
+        # whose first street happens to also be a spur).
+        sp = spur_point(a, cur_lat, cur_lon)
+        if sp:
+            last_key = _add(pts, last_key, sp[0], sp[1])
+            cur_lat, cur_lon = sp
+            forced_spurs.append(a)
+
         if ov:
             overrides.remove(ov)
             for lat, lon in ov[2]:
                 last_key = _add(pts, last_key, lat, lon)
             cur_lat, cur_lon = ov[2][-1]
             continue
-        # 'a' is the street currently being driven on the leg into this
-        # junction -- if it's a known spur/shortcut-prone street, force a
-        # real point on it BEFORE the junction so OSRM can't bypass it.
-        sp = spur_point(a, cur_lat, cur_lon)
-        if sp:
-            last_key = _add(pts, last_key, sp[0], sp[1])
-            cur_lat, cur_lon = sp
-            forced_spurs.append(a)
 
         j = best_junction(g, a, b, cur_lat, cur_lon)
         if not j:
@@ -683,15 +702,25 @@ def label_missing_spurs(steps, forced_spurs, streets):
     Walkley G2 route1's instructions this way), not just a cosmetic
     nuance -- riders read this table, not the raw coordinates. Insert an
     explicit zero-length marker step wherever a forced spur's name never
-    appears in any step's instruction."""
+    appears in any step's instruction.
+
+    forced_spurs preserves duplicates when the same street is a forced
+    spur at more than one point in the route (e.g. Ogilvie Rd, out and
+    back). Each occurrence needs ITS OWN position in `streets` and its
+    own "already covered?" check -- using streets.index(spur) (always
+    the first match) and a route-wide "is this name mentioned ANYWHERE"
+    check (found in review) means inserting a marker for the first
+    occurrence makes every later occurrence of the same street look
+    already-covered and get silently skipped, even when THAT occurrence
+    is the one actually missing from OSRM's text."""
     consumed = set()
+    search_from = 0
     for spur in forced_spurs:
-        if any(_base(spur) in _base(s["instruction"]) for s in steps):
-            continue
         try:
-            i = streets.index(spur)
+            i = streets.index(spur, search_from)
         except ValueError:
             continue
+        search_from = i + 1
         nxt = streets[i + 1] if i + 1 < len(streets) else None
         insert_at = None
         for j, s in enumerate(steps):
@@ -702,12 +731,22 @@ def label_missing_spurs(steps, forced_spurs, streets):
                 break
         if insert_at is None:
             continue
-        consumed.add(insert_at)
+        # covered for THIS occurrence if the step immediately before the
+        # insertion point already names the spur (a local check, not a
+        # route-wide one -- a different occurrence being named elsewhere
+        # doesn't mean this one is).
+        if insert_at > 0 and _base(spur) in _base(steps[insert_at - 1]["instruction"]):
+            continue
         steps.insert(insert_at, {
             "instruction": f"Continue onto {spur}",
             "distance_m": 0, "duration_s": 0,
             "traffic_control": None, "speed_limit": None,
         })
+        # the anchor step (matched on `nxt`) shifted from insert_at to
+        # insert_at+1; every already-consumed index at or past insert_at
+        # shifts the same way.
+        consumed = {(c + 1 if c >= insert_at else c) for c in consumed}
+        consumed.add(insert_at + 1)
     return steps
 
 

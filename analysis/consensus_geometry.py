@@ -97,22 +97,33 @@ class Graph:
         self.con.row_factory = sqlite3.Row
         self._j = {}
 
-    def junction(self, a, b):
-        k = tuple(sorted((key(a), key(b))))
-        if k in self._j:
-            return self._j[k]
+    def junction_candidates(self, a, b):
+        """Every real junction node where streets a and b meet, no
+        disambiguation applied -- the one query both junction() (first
+        real node, node before ramp) and manual_routes.py's
+        best_junction() (nearest to current position, capped) build on,
+        so a fix to the join itself (ramp handling, base/full matching)
+        only has to happen once. Previously manual_routes.py hand-copied
+        this whole query as its own function; the two could silently
+        diverge if one got fixed and not the other (found in review)."""
         va, vb = name_variants(a), name_variants(b)
         pa = ",".join("?" * len(va))
         pb = ",".join("?" * len(vb))
-        r = self.con.execute(f"""
+        return self.con.execute(f"""
             SELECT j.node_id, j.lat, j.lon, j.kind FROM junctions j
             WHERE j.node_id IN (SELECT node_id FROM junction_streets
                                 WHERE base IN ({pa}) OR full IN ({pa}))
               AND j.node_id IN (SELECT node_id FROM junction_streets
                                 WHERE base IN ({pb}) OR full IN ({pb}))
             ORDER BY CASE j.kind WHEN 'node' THEN 0 ELSE 1 END
-            LIMIT 1""", (*va, *va, *vb, *vb)).fetchone()
-        self._j[k] = (dict(r) if r else None)
+        """, (*va, *va, *vb, *vb)).fetchall()
+
+    def junction(self, a, b):
+        k = tuple(sorted((key(a), key(b))))
+        if k in self._j:
+            return self._j[k]
+        rows = self.junction_candidates(a, b)
+        self._j[k] = (dict(rows[0]) if rows else None)
         return self._j[k]
 
     def centre(self, cid):
@@ -169,8 +180,16 @@ class Graph:
         MAX_SPEED_MATCH_M = 3000
         if not name:
             return None
-        try:
-            if lat is not None and lon is not None:
+
+        # Own try/except: if way_maxspeed_loc doesn't exist (it's built
+        # by a separate one-off script, backfill_maxspeed_location.py,
+        # not part of the normal osm.db build pipeline) this must NOT
+        # take down the name-only fallback below with it -- a bug found
+        # in review: the two used to share one try/except, so a missing
+        # table silently zeroed out speed_limit data for every street,
+        # every route, every caller, not just the new location feature.
+        if lat is not None and lon is not None:
+            try:
                 best, best_d = None, None
                 for v in name_variants(name):
                     rows = self.con.execute(
@@ -190,6 +209,11 @@ class Graph:
                     # via the unlocated name-only fallback below would be
                     # no better. Either way, don't fall through.
                     return best if best_d <= MAX_SPEED_MATCH_M else None
+            except sqlite3.OperationalError:
+                pass  # way_maxspeed_loc missing -- fall through below,
+                      # same as "no located candidate found for this name"
+
+        try:
             for v in name_variants(name):
                 r = self.con.execute(
                     "SELECT wm.maxspeed FROM streets s "

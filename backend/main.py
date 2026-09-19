@@ -132,25 +132,23 @@ def get_map(centre_id: str, user=Depends(require_user)):
     row = query(
         """
         SELECT
-          (SELECT COALESCE(json_agg(row_to_json(rl)), '[]') FROM (
+          (SELECT COALESCE(json_agg(row_to_json(rl) ORDER BY rl.family, rl.run), '[]') FROM (
               SELECT id, family, run, trace_count, authors, distance_m,
                      geometry, test_class, mixed_classes, below_threshold,
                      predicted, source
               FROM route_lines WHERE centre_id = %(cid)s
-              ORDER BY family, run
           ) rl) AS lines,
           (SELECT COALESCE(json_agg(row_to_json(cs)), '[]') FROM (
               SELECT street_a, street_b, lat, lon, authors, weight,
                      video_count, text_count, last_seen
               FROM consensus_segments WHERE centre_id = %(cid)s
           ) cs) AS points,
-          (SELECT COALESCE(json_agg(row_to_json(st)), '[]') FROM (
-              SELECT s.route_line_id, s.instruction, s.distance_m,
+          (SELECT COALESCE(json_agg(row_to_json(st) ORDER BY st.route_line_id, st.step_order), '[]') FROM (
+              SELECT s.route_line_id, s.step_order, s.instruction, s.distance_m,
                      s.duration_s, s.traffic_control, s.speed_limit
               FROM route_line_steps s
               JOIN route_lines rl ON rl.id = s.route_line_id
               WHERE rl.centre_id = %(cid)s
-              ORDER BY s.route_line_id, s.step_order
           ) st) AS steps
         """,
         {"cid": centre_id},

@@ -284,11 +284,46 @@ function formatDuration(s) {
   return `${Math.round(s / 60)} min`;
 }
 
-function sumDuration(rows) {
-  const totalSec = rows.reduce((a, r) => a + (r.duration_s || 0), 0);
+function formatDurationTotal(totalSec) {
   const mins = Math.floor(totalSec / 60);
   const secs = Math.round(totalSec % 60);
   return mins > 0 ? `${mins} min ${secs} s` : `${secs} s`;
+}
+
+function sumDuration(rows) {
+  return formatDurationTotal(rows.reduce((a, r) => a + (r.duration_s || 0), 0));
+}
+
+// A route whose OSRM call genuinely failed still gets inserted (with a
+// synthetic straight-line geometry) but distance_m=NULL -- `|| 0` on
+// that turns a real "unknown" into a displayed "0 m", which is more
+// misleading than showing nothing in an app whose whole point is
+// accurate distances. Null only when EVERY value is null; a real 0
+// among real numbers still sums normally.
+function sumOrNull(values) {
+  const known = values.filter((v) => v != null);
+  if (!known.length) return null;
+  return known.reduce((a, v) => a + v, 0);
+}
+
+// manual_youtube routes' rows are the owner's own transcript lines, and
+// align_transcript() (manual_routes.py) stamps the SAME real leg's
+// distance/duration onto every line covering it -- the turn-onto line
+// plus every following "continue on X" line. Summing every row double-
+// (or triple-, quadruple-) counts that leg's time. Consecutive rows
+// sharing the exact same (distance_m, duration_s) pair are the same
+// real leg repeated, not two different legs that happen to match --
+// dedupe by only counting a value the first time it appears in a run.
+function sumUniqueLegDurationS(rows) {
+  let total = 0;
+  let lastKey = null;
+  for (const r of rows) {
+    if (!r.duration_s) continue;
+    const key = `${r.distance_m}|${r.duration_s}`;
+    if (key !== lastKey) total += r.duration_s;
+    lastKey = key;
+  }
+  return total;
 }
 
 // Real OSM tags (extract_traffic_data.py) -- absent for most segments
@@ -331,14 +366,16 @@ function InstructionsTable({ lines }) {
   // distance_m instead so this total agrees with the summary above it.
   const isManual = lines.some((l) => l.properties.source === "manual_youtube");
   const totalDistanceM = isManual
-    ? lines.reduce((a, l) => a + (l.properties.distance_m || 0), 0)
+    ? sumOrNull(lines.map((l) => l.properties.distance_m))
     : steps.reduce((a, r) => a + (r.distance_m || 0), 0);
-  // duration only exists per real OSRM step -- when every step is the
-  // owner's own transcript line (no per-step timing), there's no real
-  // number to show. "0 s" would be a fabricated, misleading total for a
-  // multi-km route; omit it instead.
-  const hasRealDuration = !isManual && steps.some((r) => r.duration_s);
-  const durationText = hasRealDuration ? `, ${sumDuration(steps)}` : "";
+  // manual_youtube steps repeat a leg's real duration on every line
+  // covering it (see totalDistanceM above) -- sumUniqueLegDurationS
+  // dedupes consecutive repeats instead of multiplying the real time by
+  // however many lines describe that leg. Non-manual steps are already
+  // one row per real leg, no dedup needed.
+  const hasRealDuration = steps.some((r) => r.duration_s);
+  const totalDurS = isManual ? sumUniqueLegDurationS(steps) : steps.reduce((a, r) => a + (r.duration_s || 0), 0);
+  const durationText = hasRealDuration && totalDurS > 0 ? `, ${formatDurationTotal(totalDurS)}` : "";
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -439,7 +476,14 @@ function RoutePanel({ centreId, geojson, route, center }) {
 
   // per-ROUTE distance/duration (one route, not every route summed).
   const steps = lineFeatures.flatMap((f) => f.properties.steps || []);
-  const totalDur = steps.reduce((a, s) => a + (s.duration_s || 0), 0);
+  // manual_youtube steps repeat a leg's real duration on every
+  // transcript line covering it -- summing every row multiplies the
+  // real driving time by however many lines describe that leg (caught
+  // live: a real ~5min route was showing "~14 min driving"). Dedupe
+  // consecutive repeats the same way totalDist's sibling column does.
+  const totalDur = route && route.manualVerified
+    ? sumUniqueLegDurationS(steps)
+    : steps.reduce((a, s) => a + (s.duration_s || 0), 0);
   // manual_youtube routes show the owner's own transcript lines as
   // instructions (see manual_routes.py's TRANSCRIPT), which don't carry
   // a real per-step distance -- summing steps would silently show "0 m"
@@ -447,7 +491,7 @@ function RoutePanel({ centreId, geojson, route, center }) {
   // OSRM-measured distance_m (always present regardless of step
   // wording) is the honest total here.
   const totalDist = route && route.manualVerified
-    ? lineFeatures.reduce((a, f) => a + (f.properties.distance_m || 0), 0)
+    ? sumOrNull(lineFeatures.map((f) => f.properties.distance_m))
     : steps.reduce((a, s) => a + (s.distance_m || 0), 0);
 
   return (
