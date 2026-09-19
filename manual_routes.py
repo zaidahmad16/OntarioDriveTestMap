@@ -69,15 +69,18 @@ ROUTES = {
         "Brockville St", "Van Horne Ave", "Percy St",
     ],
     ("smithsfalls", "G", 0): [
-        # "Regional Rd" (x2) -> County Road 29: no street named "Regional
-        # Rd" exists in this OSM extract near Smiths Falls; County Road 29
-        # is the only road touching BOTH Eric Hutcheson Rd and Brockville
-        # St at the right spot. Confidence: medium -- flagged for review.
+        # "Regional Rd" (x2, after Eric Hutcheson) -> Jasper Road:
+        # owner confirmed from the video ("jasper rd then jasper ave").
+        # Real OSM junction node 389198623 is literally "Eric Hutcheson
+        # Road, Jasper Avenue, Jasper Road" all meeting at one point --
+        # Jasper Road becomes Jasper Avenue right there. High confidence,
+        # owner-confirmed.
+        # (Earlier "County Rd" near Van Horne/Brockville is unrelated --
+        # that's really County Road 29, unaffected by this correction.)
         "Van Horne Ave", "Brockville St", "County Road 29", "Brockville St",
-        "County Road 29", "Eric Hutcheson Rd", "County Road 29",
-        "Brockville St", "Jasper Ave", "Brockville St", "Jasper Ave",
-        "Old Slys Rd", "Jasper Ave", "Beckwith St", "Chambers St",
-        "Market St", "Main St", "Beckwith St", "Brockville St",
+        "County Road 29", "Eric Hutcheson Rd", "Jasper Road", "Jasper Ave",
+        "Jasper Road", "Old Slys Rd", "Jasper Ave", "Beckwith St",
+        "Chambers St", "Market St", "Main St", "Beckwith St", "Brockville St",
         "County Road 29", "Brockville St", "County Road 29", "Brockville St",
         "Broadview Ave", "Percy St",
     ],
@@ -149,6 +152,352 @@ ROUTES = {
         "Walkley Rd", "Heatherington Rd", "Albion Rd N", "Kitchener Ave",
         "Banff Ave", "St Paul Ave", "Bank St", "Hunt Club Rd W",
         "Airport Parkway", "Walkley Rd",
+    ],
+}
+
+# (a, b, lat, lon): pins a specific occurrence of a street pair to a real
+# coordinate instead of trusting "nearest candidate to current position" --
+# for pairs with more than one real junction (a crescent looping off a
+# road has two), nearest isn't always the one actually driven. Each entry
+# is consumed once, in order, so a pair appearing twice in one route can
+# have two different overrides.
+JUNCTION_OVERRIDES = {
+    ("walkley", "G2", 0): [
+        # owner, from the video: "at the 2nd stop sign [not the 1st],
+        # turn left onto Fairlea Cres" -- Heatherington Rd x Fairlea
+        # Crescent has 2 real junctions ~200m apart (it loops off
+        # Heatherington and back on); the nearer one (~125m from the
+        # Walkley/Heatherington turn) is the 1st, the farther one
+        # (~320m) is the 2nd. Owner confirmed farther is correct.
+        ("Heatherington Rd", "Fairlea Cres", 45.3752609, -75.6435828),
+    ],
+}
+
+
+# Owner's own words from the transcript, verbatim (numbering and pure
+# "@Centre"/"@Cetnre" marker lines stripped, nothing else changed --
+# including the owner's own spelling of street names). This is what
+# actually gets shown in the app's turn-by-turn table now, in place of
+# OSRM's generic auto-generated phrasing: the owner watched the real
+# video and wrote these down, they're more trustworthy than a template.
+# Real distance/duration only make sense at the whole-route level here
+# (these lines don't map 1:1 onto OSRM's own routing legs) -- per-step
+# distance/duration/junction/speed-limit are left blank, not guessed.
+TRANSCRIPT = {
+    ("smithsfalls", "G2", 0): [
+        "Turn right after exiting your parking spot. (Note: Park in reverse when you reach the test centre)",
+        "Turn left on to Percy st from the stop sign",
+        "Do a parallel parking on Percy st",
+        "Turn left on Tulon St",
+        "Wait at the stop sign and turn Right on to Brockville st.",
+        "Turn left on to davidson st W",
+        "Stop at stop sign on davidson st",
+        "Curb side parking on davidson st W uphill with the curb",
+        "At the stop sign turn right on to Lavina St",
+        "Perform three-point turn on Lavina ST",
+        "At the stop sign turn right onto St. Lawrence",
+        "Continue on Andrew Ave.",
+        "At the stop sign turn left on Broadview Ave W",
+        "At the light, use the filter to turn right on to Brockville st",
+        "At the intersection, turn left on to Van Horne Ave",
+        "Continue on to Percy St",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("smithsfalls", "G", 0): [
+        "At  the stop sign turn right on Van Horne",
+        "At the stop sign, turn left on to Brockville St",
+        "Continue on County Rd",
+        "Continue on Brockville St",
+        "Continue on County Rd",
+        "At the light turn left on to Eric Hutcheson Rd",
+        "Continue on Eric Hutcheson Rd",
+        "At the stop sign turn left on to Regional Rd",
+        "Continue on Regional Rd",
+        "Continue on Jasper Ave",
+        "Continue on Regional Rd",
+        "At the stop Sign turn left onto Old slys Rd",
+        "Continue on Old slys Rd",
+        "Continue on Jasper Ave",
+        "At the light turn right onto Beckwith",
+        "At the light turn right onto Chambers",
+        "At the Red flashing light, turn left onto Market St",
+        "At the stop sign, turn left onto Main St",
+        "At the light, turn left onto Beckwith St",
+        "Continue on Beckwith St",
+        "Continue on Brockville",
+        "Continue on County Rd",
+        "Continue on Brockville",
+        "Continue on County Rd",
+        "At the light, turn left onto Broadview",
+        "Continue on Broadview",
+        "Turn left onto Percy St",
+        "At the stop sign,  Continue straight on Percy St",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("canotek", "G2", 0): [
+        "At the Stop sign at the @centre, turn right onto Canotek Rd",
+        "At the light, turn left into shefford",
+        "Continue shefford",
+        "At the light, turn tight onto Montreal Rd",
+        "At the 3rd light, turn left into Ogilvie Rd",
+        "At the light, turn right into Appleford St",
+        "Prepare to perform an emergency stop on Appleford St",
+        "Prepare to turn right into Elmridge dr",
+        "Prepare to perform Parallel Parking and three point turn",
+        "At the stop sign turn right onto Appleford St",
+        "At the stop sign turn right at the 1st cross street onto Crownhill St",
+        "Continue onto Seguin St",
+        "At the stop sign Perform a complete stop",
+        "At the end of the road/stop sign, turn left onto Blair rd",
+        "At the light, turn left onto Ogilvie Rd",
+        "At the light, turn right onto Montreal Rd",
+        "At the light, turn left onto Shefford Rd",
+        "At the light, turn right onto Canotek Rd",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("canotek", "G2", 1): [
+        "Turn right onto Canotek rd",
+        "At the light, turn left on Shefford rd",
+        "At the light, turn right on Montreal rd",
+        "Continue on Montreal rd",
+        "Continue on Ottawa 34",
+        "At the light turn left onto Miss Ottawa St",
+        "Turn left onto Lerner Way",
+        "Perform a three point turn on Lerner Way",
+        "At the stop sign, left onto Miss Ottawa St",
+        "At the stop sign turn left onto E Acres Rd",
+        "Turn left on to Shefford Rd",
+        "At the light, keep going straight",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("canotek", "G2", 2): [
+        "Go straight on to Loyola Ave",
+        "At the stop sign, turn right onto Eastvale Dr",
+        "Continue on Eastvale Dr",
+        "Turn left onto Grafton Crescent",
+        "On Grafton Crescent,  perform uphill or downhill park",
+        "On Grafton Crescent,  perform a three point turn",
+        "At the stop sign, turn right on to Eastvale Dr",
+        "Continue on Eastvale Dr",
+        "At the stop sign, turn right and Continue on Eastvale Dr",
+        "At the light, turn left onto Ogilvie Rd",
+        "Continue on Ogilvie Rd",
+        "At the light, turn left onto Montreal Rd",
+        "Continue on Montreal Rd",
+        "Continue on Ottawa 34",
+        "At the light, turn left onto Shefford Rd",
+        "Continue on Shefford Rd",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("canotek", "G", 0): [
+        "At the stop sign, turn right onto Canotek Rd",
+        "Continue on Canotek Rd",
+        "At the light, turn left onto Shefford Rd",
+        "Continue on Shefford Rd",
+        "At the light, turn left on Montreal Rd",
+        "Continue on Montreal Rd",
+        "Continue on Ottawa 34",
+        "At the light, Continue on Ottawa 34",
+        "At the 2nd light, turn right onto the highway  174 East ramp",
+        "Continue on Regional Rd 174",
+        "Exit off onto Boul Jeanne-d'Arc Blvd",
+        "Stick to the right lane and go right onto 55",
+        "At the light, turn right onto Youville Dr",
+        "Continue on Youville Dr",
+        "At the light, turn left onto St Joseph Blvd",
+        "Continue on St Joseph Blvd",
+        "At the roundabout, exit left onto Jeanne-d'Arc Blvd",
+        "Continue on Jeanne-d'Arc Blvd",
+        "At the first light, continue Straight",
+        "At the second light, continue Straight",
+        "At the third light, turn right onto the Queenways ramp",
+        "Continue on the Queensways",
+        "Exit off on Ch. de Montreal Rd.",
+        "Keep to the right lane and keep right and onto Montreal Rd",
+        "Continue on Montreal Rd",
+        "At the light turn right onto Shefford Rd",
+        "Continue on Shefford Rd",
+        "At the light go straight",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("canotek", "G", 1): [
+        "Turn left onto Shefford",
+        "At the light continue straight",
+        "At the 2nd light, turn right onto Montreal Rd",
+        "Continue on Montreal Rd",
+        "At the light, continue straight",
+        "At the 2nd light, turn left onto Ogilvie Rd",
+        "At the light, continue straight",
+        "At the second light, continue straight",
+        "At the third light, continue straight",
+        "At the fourth light, continue straight",
+        "At the fifth  light, continue straight",
+        "At the sixth light, continue straight",
+        "At the 7th  light, turn left onto 27",
+        "At the light, continue straight",
+        "At the 2nd light, turn left onto to highway ramp",
+        "Continue on the Queensway",
+        "Exit off onto Ch. de Montreal Rd exit ramp",
+        "At the light turn left onto Montreal Rd",
+        "At the light continue straight",
+        "At the 2nd light, turn right onto Shefford",
+        "At the light continue straight",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("walkley", "G2", 0): [
+        "At the back of the @Centre,there is a lot to perform a parallel park and 3 point turn",
+        "Turn right onto Walkey rd",
+        "Continue on Walkey rd",
+        "At the light, turn right onto Heatherington Rd",
+        "Continue on Heatherington Rd",
+        "At the stop sign, Continue on Heatherington Rd",
+        "At the 2nd stop sign, turn left onto Fairlea Cres",
+        "Mid way through Fairlea Cres, perform uphill/downhil park",
+        "Continue on Fairlea Cres",
+        "At the stop sign turn right onto Heatherington Rd",
+        "At the light turn left onto walkey rd",
+        "Continue walkey rd",
+        "At the light turn right onto Baycrest Dr",
+        "Continue on Baycrest Dr",
+        "At the stop sign turn left onto Crederwood Dr",
+        "Continue on Crederwood Dr",
+        "At the light turn left onto Walkley rd",
+        "Continue on Walkley rd",
+        "At the light, continue Straight",
+        "Continue on Walkley rd",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("walkley", "G2", 1): [
+        "At the back of the @Centre,there is a lot to perform a parallel park and 3 point turn",
+        "Turn left onto the median",
+        "When safe to do so, turn right onto the walkley rd",
+        "Continue walkey rd",
+        "At the first light, continue on walkway rd",
+        "At the second light turn right onto Cedarwood Dr",
+        "Continue on Cedarwood Dr",
+        "At the stop sign, turn left onto Baycrest Dr",
+        "Continue on Baycrest Dr",
+        "At the light, turn right onto Heron Rd",
+        "Continue on Heron Rd",
+        "At the light, turn left onto Briar Hill Dr",
+        "Continue on Briar Hill Dr",
+        "Perform Uphill/Downhill on Briar Hill Dr",
+        "Continue on Briar Hill Dr",
+        "At the stop sign, turn Right onto Featherston Dr",
+        "Continue on Featherston Dr",
+        "At the stop sign, turn right onto Jefferson St",
+        "Continue on Jefferson St",
+        "At the light, turn left onto Heron Rd",
+        "Continue on Heron Rd",
+        "At the light, use the filter and turn right onto Walkey Rd",
+        "Continue on Walkey Rd",
+        "At the light, Continue on Walkey Rd",
+        "Turn onto the median and when safe to do so turn left onto DriveTest Centre",
+    ],
+    ("walkley", "G2", 2): [
+        "At the back of the @Centre,there is a lot to perform a parallel park and 3 point turn",
+        "Turn left onto the median",
+        "When safe to do so, turn right onto the walkley rd",
+        "Continue walkey rd",
+        "At the light turn right onto Baycrest Dr",
+        "Continue on Baycrest Dr",
+        "At the stop sign Continue straight on Baycrest Dr",
+        "At the light, turn right onto Heron Rd",
+        "Continue on Heron Rd",
+        "At the light, turn left onto Briar Hill Dr",
+        "Continue on Briar Hill Dr",
+        "Perform Uphill/Downhill on Briar Hill Dr",
+        "Continue on Briar Hill Dr",
+        "At the stop sign, turn Right onto Featherston Dr",
+        "Continue on Featherston Dr",
+        "At the stop sign, turn right onto Jefferson St",
+        "Continue on Jefferson St",
+        "At the light, turn right onto Heron Rd",
+        "Continue on Heron Rd",
+        "At the light, Continue on Heron Rd",
+        "At the 2nd light, turn left onto Baycrest Dr",
+        "Continue on Baycrest Dr",
+        "At the stop sign, turn right onto Cedarwood Dr",
+        "Continue on Crederwood Dr",
+        "At the light turn left onto Walkley rd",
+        "Continue on Walkley rd",
+        "At the light, continue Straight",
+        "Continue on Walkley rd",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("walkley", "G", 0): [
+        "Turn left onto the median",
+        "When safe to do so, turn right onto Walkey Rd",
+        "Continue on Walkey Rd",
+        "lots of lights, keep straight on Walkey Rd",
+        "Right after your cross the bridge, turn to the left lane, and turn left onto Airport Parkway enter ramp",
+        "Continue on Airport Parkway",
+        "Get off the prom. Uplands Dr. exit ramp",
+        "Get the light, turn left onto  Uplands Dr",
+        "Continue on Uplands Dr",
+        "At the light, Turn left onto Airport Parkway enter ramp",
+        "Continue on Airport Parkway",
+        "Get off the Walkley Rd exit ramp",
+        "At the light, turn right onto Walkley Rd",
+        "Continue on Walkley Rd",
+        # transcript ends here (truncated, no return-to-centre text) --
+        # kept as-is rather than inventing a closing line.
+    ],
+    ("walkley", "G", 1): [
+        "Turn left onto the median",
+        "When safe to do so, turn right onto Walkey Rd",
+        "Continue on Walkey Rd",
+        "lots of lights, keep straight on Walkey Rd",
+        "Right after your cross the bridge, turn to the left lane, and turn left onto Airport Parkway enter ramp",
+        "Continue on Airport Parkway",
+        "Exit off the Hunt Club Road Exit ramp",
+        "At the filter, go turn onto Hunt club",
+        "At the light, continue on hunt club",
+        "At the 2nd light turn right onto Uplands Drive",
+        "Continue Uplands drive",
+        "At the stop sign, turn right onto Paul Anka Dr",
+        "Continue on Paul Anka Dr",
+        "At the light turn right onto Mc Karthy Rd",
+        "Continue on Mc Karthy Rd",
+        "At the stop sign, Continue on Mc Karthy Rd",
+        "At the light, turn left onto Hunt Club",
+        "Continue on Hunt Club",
+        "At the light, turn left onto Airport Parkway enter ramp",
+        "Continue on Airport Parkway",
+        "Get off the Walkley rd exit ramp",
+        "At the light turn right onto Walkley rd",
+        "Continue on Walkley rd",
+        "Pull into the DriveTest Centre at the intersection",
+    ],
+    ("walkley", "G", 2): [
+        "Turn right onto walkey rd",
+        "Continue on walkey rd",
+        "At the light, turn left onto Heatherington rd",
+        "At the stop sign, continue on Heatherington rd",
+        "At the 2nd stop sign, continue on Heatherington rd",
+        "At the 3rd stop sign, continue on Heatherington rd",
+        "At the 4th stop sign, turn left onto Albion rd N",
+        "Continue on Albion rd N",
+        "At the stop sign, turn right onto Kitchener Ave",
+        "Continue on Kitchener Ave",
+        "At the stop sign, continue on Kitchener Ave",
+        "Turn right onto Banaf Ave",
+        "Continue on Banaf Ave",
+        "At the intersection, turn left onto  St Paul Ave",
+        "Continue on St Paul Ave",
+        "At the stop sign, turn left onto Bank St",
+        "Continue on Bank St",
+        "At the light, Continue on Bank St",
+        "At the 2nd light, Continue on Bank St",
+        "At the 3rd light, turn right onto Hunt Club Rd W",
+        "Continue on Hunt Club Rd W",
+        "At the light, continue on Hunt Club Rd W",
+        "At the intersection turn right onto the prom. Airport PKwy enter ramp",
+        "Continue on Airport Parkway",
+        "Exit off the Walkey rd exit ramp",
+        "At the light, turn right onto Walkey rd",
+        "Continue on Walkley rd",
+        "Pull into the DriveTest Centre at the intersection",
     ],
 }
 
@@ -270,14 +619,30 @@ def _add(pts, last_key, lat, lon):
     return last_key
 
 
-def resolve(centre, streets, g, pause=0.3):
+def resolve(centre, streets, g, overrides=None, pause=0.3):
     centre_ll = CENTRE_COORDS[centre]
     pts = [{"lat": centre_ll[0], "lon": centre_ll[1]}]
     failed = []
     forced_spurs = []
     last_key = None
     cur_lat, cur_lon = centre_ll
+    overrides = list(overrides or [])
     for a, b in zip(streets, streets[1:]):
+        # A street PAIR can meet at more than one real point -- a
+        # crescent that loops off a road and back onto it has TWO real
+        # junctions with that road, and "nearest to current position"
+        # isn't necessarily the one actually driven (owner caught this:
+        # Heatherington Rd x Fairlea Crescent has 2 real junctions ~200m
+        # apart, "2nd stop sign" per the video means the FARTHER one,
+        # not the nearer default pick). overrides lets a specific
+        # occurrence be pinned to a real coordinate instead of guessed.
+        ov = next((o for o in overrides
+                   if _base(o[0]) == _base(a) and _base(o[1]) == _base(b)), None)
+        if ov:
+            overrides.remove(ov)
+            last_key = _add(pts, last_key, ov[2], ov[3])
+            cur_lat, cur_lon = ov[2], ov[3]
+            continue
         # 'a' is the street currently being driven on the leg into this
         # junction -- if it's a known spur/shortcut-prone street, force a
         # real point on it BEFORE the junction so OSRM can't bypass it.
@@ -305,6 +670,45 @@ def resolve(centre, streets, g, pause=0.3):
     return pts, failed, forced_spurs
 
 
+def label_missing_spurs(steps, forced_spurs, streets):
+    """A forced spur point makes OSRM actually DRIVE the street (geometry
+    confirmed by a 0m-distance check against the street's real OSM nodes
+    -- see manual_routes_report.md), but OSRM's own auto-generated
+    instruction TEXT can still fail to name it: if the path glides
+    through without a sharp turn, OSRM merges it into "continue onto
+    <neighbour>" instead. That's a real defect in the user-facing
+    turn-by-turn table (Cedarwood Dr was found completely absent from
+    Walkley G2 route1's instructions this way), not just a cosmetic
+    nuance -- riders read this table, not the raw coordinates. Insert an
+    explicit zero-length marker step wherever a forced spur's name never
+    appears in any step's instruction."""
+    consumed = set()
+    for spur in forced_spurs:
+        if any(_base(spur) in _base(s["instruction"]) for s in steps):
+            continue
+        try:
+            i = streets.index(spur)
+        except ValueError:
+            continue
+        nxt = streets[i + 1] if i + 1 < len(streets) else None
+        insert_at = None
+        for j, s in enumerate(steps):
+            if j in consumed:
+                continue
+            if nxt and _base(nxt) in _base(s["instruction"]):
+                insert_at = j
+                break
+        if insert_at is None:
+            continue
+        consumed.add(insert_at)
+        steps.insert(insert_at, {
+            "instruction": f"Continue onto {spur}",
+            "distance_m": 0, "duration_s": 0,
+            "traffic_control": None, "speed_limit": None,
+        })
+    return steps
+
+
 def main():
     cg.load_known(DB_PATH)
     g = cg.Graph(DB_PATH)
@@ -313,7 +717,8 @@ def main():
     by_centre = {}
     all_failed = {}
     for (centre, cls, idx), streets in ROUTES.items():
-        pts, failed, forced_spurs = resolve(centre, streets, g)
+        pts, failed, forced_spurs = resolve(
+            centre, streets, g, overrides=JUNCTION_OVERRIDES.get((centre, cls, idx)))
         n_resolved_pairs = len(streets) - 1 - len(failed)
         print(f"=== {centre} {cls} route{idx} === "
               f"{n_resolved_pairs}/{len(streets)-1} pairs resolved, "
@@ -338,6 +743,16 @@ def main():
         if geom is None:
             geom = {"type": "LineString",
                     "coordinates": [[p["lon"], p["lat"]] for p in pts]}
+        if steps:
+            steps = label_missing_spurs(steps, forced_spurs, streets)
+
+        lines = TRANSCRIPT.get((centre, cls, idx))
+        if lines:
+            steps = [
+                {"instruction": line, "distance_m": None, "duration_s": None,
+                 "traffic_control": None, "speed_limit": None}
+                for line in lines
+            ]
 
         by_centre.setdefault(centre, []).append({
             "type": "Feature",
@@ -396,9 +811,16 @@ def apply_to_db(by_centre):
           f"{len(backup['route_line_steps'])} steps)")
 
     for centre, feats in by_centre.items():
+        # deletes BOTH the old rebuild_routes rows (first-ever apply) and
+        # any earlier manual_youtube rows (a later re-apply after fixing
+        # a substitution) -- a re-apply that only matched 'rebuild_routes'
+        # left the previous manual_youtube rows in place and duplicated
+        # the whole centre (hit this for real: 26 rows instead of 13,
+        # fixed by hand via fix_duplicate_rows.py, see git history).
         cur.execute(
-            "DELETE FROM route_lines WHERE centre_id = %s AND source = %s",
-            (centre, "rebuild_routes"))
+            "DELETE FROM route_lines WHERE centre_id = %s "
+            "AND source IN ('rebuild_routes', 'manual_youtube')",
+            (centre,))
         for feat in feats:
             p = feat["properties"]
             coords = feat["geometry"]["coordinates"]

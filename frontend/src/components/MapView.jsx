@@ -323,12 +323,22 @@ function InstructionsTable({ lines }) {
   );
   if (!steps.length) return null;
 
-  const totalDistanceM = steps.reduce((a, r) => a + (r.distance_m || 0), 0);
+  // manual_youtube routes' steps are the owner's own transcript lines
+  // (no per-step distance) -- fall back to the real, OSRM-measured
+  // per-line distance_m instead of summing to a false "0 m".
+  const stepsDistanceM = steps.reduce((a, r) => a + (r.distance_m || 0), 0);
+  const totalDistanceM = stepsDistanceM || lines.reduce((a, l) => a + (l.properties.distance_m || 0), 0);
+  // duration only exists per real OSRM step -- when every step is the
+  // owner's own transcript line (no per-step timing), there's no real
+  // number to show. "0 s" would be a fabricated, misleading total for a
+  // multi-km route; omit it instead.
+  const hasRealDuration = steps.some((r) => r.duration_s);
+  const durationText = hasRealDuration ? `, ${sumDuration(steps)}` : "";
 
   return (
     <div style={{ marginTop: 12 }}>
       <p style={{ fontSize: "0.9em", marginBottom: 4 }}>
-        <b>Total: {formatDistance(totalDistanceM)}, {sumDuration(steps)}</b> for this
+        <b>Total: {formatDistance(totalDistanceM)}{durationText}</b> for this
         route.
       </p>
       <p style={{ fontSize: "0.85em", color: "#555", marginBottom: 6 }}>
@@ -425,7 +435,15 @@ function RoutePanel({ centreId, geojson, route, center }) {
   // per-ROUTE distance/duration (one route, not every route summed).
   const steps = lineFeatures.flatMap((f) => f.properties.steps || []);
   const totalDur = steps.reduce((a, s) => a + (s.duration_s || 0), 0);
-  const totalDist = steps.reduce((a, s) => a + (s.distance_m || 0), 0);
+  // manual_youtube routes show the owner's own transcript lines as
+  // instructions (see manual_routes.py's TRANSCRIPT), which don't carry
+  // a real per-step distance -- summing steps would silently show "0 m"
+  // for a route that's actually several km. The route's own real,
+  // OSRM-measured distance_m (always present regardless of step
+  // wording) is the honest total here.
+  const totalDist = route && route.manualVerified
+    ? lineFeatures.reduce((a, f) => a + (f.properties.distance_m || 0), 0)
+    : steps.reduce((a, s) => a + (s.distance_m || 0), 0);
 
   return (
     <div>
