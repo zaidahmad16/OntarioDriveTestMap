@@ -4,7 +4,7 @@ manual_routes.py — build route_lines directly from the user's own manual
 YouTube-video route transcriptions (Downloads/Manual Route trace youtube.md),
 instead of inferring routes from crowdsourced traces.
 
-DESTINATION: manual_routes.py (repo root)
+DESTINATION: scripts/manual_routes.py
 
 This is ground truth, hand-verified by the user watching real drive-test
 videos street by street -- strictly better than anything rebuild_routes.py

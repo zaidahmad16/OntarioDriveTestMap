@@ -3,7 +3,7 @@
 backfill_maxspeed_location.py — real coordinates for maxspeed-tagged
 ways, so speed limits can be looked up by LOCATION, not just street name.
 
-DESTINATION: backfill_maxspeed_location.py (repo root), needs venv/bin/python3
+DESTINATION: scripts/backfill_maxspeed_location.py, needs venv/bin/python3
 
 Why this exists: `Graph.street_maxspeed(name)` (analysis/consensus_geometry.py)
 picks whichever tagged way SQLite happens to return first for a street
@@ -22,7 +22,7 @@ street name actually used in manual_routes.py's ROUTES, not a full
 province-wide backfill -- keeps the pbf pass fast and targeted.
 
 Usage:
-    venv/bin/python3 backfill_maxspeed_location.py
+    venv/bin/python3 scripts/backfill_maxspeed_location.py
 """
 import sqlite3
 import sys

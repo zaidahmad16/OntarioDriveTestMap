@@ -3,7 +3,7 @@
 build_spur_nodes.py — real node geometry for streets manual_routes.py
 can't trust a single junction coordinate for.
 
-DESTINATION: build_spur_nodes.py (repo root)
+DESTINATION: scripts/build_spur_nodes.py
 
 Some named streets in a manually-transcribed route are short spurs used
 only for a parking maneuver (Elmridge, Lerner, Grafton), or a street

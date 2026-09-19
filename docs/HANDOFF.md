@@ -105,7 +105,7 @@ a custom Docker image for it — the data's real scale (hundreds of
 points, not millions) doesn't need it. Schema uses plain
 `DOUBLE PRECISION` lat/lon columns.
 
-**Schema** (`schema.sql`, already run against Railway):
+**Schema** (`backend/schema.sql`, already run against Railway):
 - `centres` (id, name)
 - `traces` (source_id, centre_id, test_class, reliability, observed_at,
   author_hash, status) — one row per collected Reddit/video account
@@ -126,7 +126,7 @@ points, not millions) doesn't need it. Schema uses plain
 - `users` (google_sub, email, name, created_at, last_login) — added
   separately via `backend/users_schema.sql`, no passwords anywhere
 
-**Migration script**: `migrate_to_postgres.py` (repo root). Idempotent
+**Migration script**: `scripts/migrate_to_postgres.py`. Idempotent
 — deletes each centre's rows before reinserting, so reruns always
 reflect current JSON state. Dedupes `all_traces.json` against
 `reddit_traces.json`/`ocr_traces.json` (Canotek's `all_traces.json` is
@@ -364,9 +364,9 @@ data that got caught) belongs in the Notion Build Log, see links below.
 
 **What changed:**
 - `route_lines` gained two columns: `test_class TEXT`,
-  `mixed_classes BOOLEAN NOT NULL DEFAULT false` (`schema.sql`, applied
+  `mixed_classes BOOLEAN NOT NULL DEFAULT false` (`backend/schema.sql`, applied
   live via `ALTER TABLE`).
-- `migrate_to_postgres.py` and `backend/main.py` carry these fields
+- `scripts/migrate_to_postgres.py` and `backend/main.py` carry these fields
   through end to end (insert on migration, expose in
   `GET /centres/{id}/map`'s route_line feature properties).
 - `common/classvote.py` (new): one shared `class_vote()` function,

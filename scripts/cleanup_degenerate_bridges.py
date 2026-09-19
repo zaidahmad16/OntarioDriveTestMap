@@ -3,7 +3,7 @@
 cleanup_degenerate_bridges.py — remove zero-length predicted "bridges"
 from route_lines.
 
-DESTINATION: cleanup_degenerate_bridges.py (repo root)
+DESTINATION: scripts/cleanup_degenerate_bridges.py
 
 Background: predict_family_bridges.py used to draw a bridge between any
 two disconnected components of a family, using their nearest pair of
@@ -35,9 +35,9 @@ Safety:
     number of rows deleted doesn't match the number identified.
 
 Usage:
-    python3 cleanup_degenerate_bridges.py                  # dry run
-    python3 cleanup_degenerate_bridges.py --apply          # delete
-    python3 cleanup_degenerate_bridges.py --apply --epsilon-m 5
+    python3 scripts/cleanup_degenerate_bridges.py                  # dry run
+    python3 scripts/cleanup_degenerate_bridges.py --apply          # delete
+    python3 scripts/cleanup_degenerate_bridges.py --apply --epsilon-m 5
 """
 import argparse
 import datetime as dt

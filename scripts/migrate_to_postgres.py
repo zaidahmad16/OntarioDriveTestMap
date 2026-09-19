@@ -3,11 +3,11 @@
 migrate_to_postgres.py — load the local JSON pipeline output into Railway
 Postgres.
 
-DESTINATION: migrate_to_postgres.py (repo root)
+DESTINATION: scripts/migrate_to_postgres.py
 
 Reads each centre's traces (reddit_traces.json + ocr_traces.json where
 present), snapped.json, consensus.geojson, and consensus_routes.geojson,
-and inserts them into the schema created by schema.sql. Idempotent: safe
+and inserts them into the schema created by backend/schema.sql. Idempotent: safe
 to re-run — existing rows are deleted per centre before reinserting, so
 this always reflects the current state of the JSON files, not an
 accumulating history.
