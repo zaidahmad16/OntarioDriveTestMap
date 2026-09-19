@@ -445,3 +445,138 @@ The mixed-class heuristic's before/after (spurious v1 vs. the
 tightened-threshold-plus-classvote-fix v2) is exactly the kind of thing
 that belongs in the Build Log — this project treats "the plan was
 wrong" as material worth recording, not something to bury.
+
+---
+
+## Part 7 — route-quality overhaul, rebuild_routes.py, manual_routes.py (2026-09-14 through 2026-09-18, multiple sessions)
+
+Everything below happened after Part 6 and is NOT reflected in Parts
+1-6 above (this file went stale for several sessions again — see Part 5's
+note about that being a recurring failure mode). Full narrative detail
+is in Claude's own persistent memory and `SESSION_LOG_2026-09-14.md`;
+this is the compressed version so a fresh session isn't starting blind.
+
+**Branch:** still `feat/route-test-class-map`. It IS now pushed to
+origin (the Part 6 push instruction is done). Latest commits build
+`manual_routes.py` (uncommitted as of this writing — see below).
+
+**2026-09-14 session:** fixed `InstructionsTable`'s build break,
+fixed `MapView.matchesFilter()` hiding 4 of Walkley's 8 confirmed
+routes (null-class routes matched neither G nor G2 filter button),
+fixed a real `db.py` connection-pool poisoning bug (an aborted
+transaction never rolled back, breaking every later request until
+restart), fixed an N+1 query in `get_map`. Root-caused OSRM's
+straight-beeline behavior for unroutable junction pairs (778m gaps in
+Walkley's confirmed geometry) — frontend now splits at >400m gaps and
+renders them dashed ("unrouted"), `consensus_geometry.py` records
+`gap_m`. Confirmed Canotek's G/G2 same-speed-profile finding is a real
+data-coverage gap (no trace ever covered the Hwy 174 leg), not a bug.
+
+**2026-09-15 session — route-quality overhaul:** root-caused why
+routes "didn't look like one route": `families()` clusters on shared
+streets and is class-blind, merging G+G2 routes onto arterials they
+both use. Fixed with `class_families()` (cluster within class only).
+Built **`rebuild_routes.py`** (repo root): per (centre, class), take
+the class's own confirmed traces, pick the most-complete real trace as
+a "backbone" (its driven-order turns ARE the route), OSRM-route its
+junctions in order. `ROUTE_COUNTS` dict held the assumed ground truth
+route count per (centre, class) — **this assumption was wrong, see
+below.** `rebuild_routes.py --apply` was run for real at some point
+after the session ended (confirmed via `psql`: all 8 live `route_lines`
+rows have `source='rebuild_routes'`) — Walkley G=1/G2=3, Canotek
+G=1/G2=1, Smiths Falls G=1/G2=1.
+
+**2026-09-18 session — the real ground truth arrived.** The user spent
+days hand-transcribing real DriveTest YouTube videos, street-by-street,
+into `~/Downloads/Manual Route trace youtube.md` — genuine ground
+truth, not inference. **It overturns `rebuild_routes.py`'s
+`ROUTE_COUNTS`**: Walkley G is actually **3** routes (not 1), Canotek G
+is **2** (not 1), Canotek G2 is **3** (not 1). Only Walkley G2 (3) and
+Smiths Falls (1 each) were already right.
+
+Built **`manual_routes.py`** (repo root, dry-run only, no `--apply` — a
+deliberate choice, see below) + **`build_spur_nodes.py`** (one-off
+pyosmium scan of `data/raw/ontario-latest.osm.pbf`, needs
+`venv/bin/python3`) to turn the transcript into real routed geometry
+via `data/osm.db` + OSRM. Output: `data/out/manual/*.geojson`, viewable
+via `data/out/manual/viewer.html` (a throwaway Leaflet page, `python3
+-m http.server 8899` from that directory; supports `?focus=walkley` /
+`canotek` / `smithsfalls` query param to jump straight to a centre).
+
+**Two real bugs found and fixed while building this, both would have
+silently produced wrong routes — worth knowing if extending
+`Graph.junction()` (in `analysis/consensus_geometry.py`) to more
+centres:**
+1. `data/osm.db` is Ontario-wide, not per-centre. `Graph.junction()`
+   picks the FIRST matching junction with no location filtering — for
+   a common street name that recurs elsewhere in the province, it can
+   silently grab the wrong one. Blew Smiths Falls G out to **170km**
+   before catching it. `manual_routes.py`'s `best_junction()` picks the
+   candidate nearest current position, capped at 15km.
+2. A junction coordinate alone doesn't force OSRM to actually drive a
+   named street — for a dead-end spur (a parking-maneuver detour:
+   Elmridge Dr, Lerner Way, Grafton Crescent) or a street whose two
+   flanking junctions are reachable without touching it, OSRM's
+   shortest path can silently bypass it. Confirmed present only in the
+   auto-generated turn-by-turn TEXT, verified this by checking actual
+   route-geometry coordinates pass within 0m of a real node on every
+   named street (they do, for all 13 routes, after the fix) — the
+   text-only check is not reliable for this, the geometry check is.
+   Fixed with `build_spur_nodes.py` sampling a real point from each
+   problem street's own OSM geometry, forced in as an explicit
+   waypoint.
+
+**Verified this session (visual, in a real browser via
+claude-in-chrome, on real OSM tiles):** all three centres' routes are
+coherent loops, no teleports, Walkley G properly loops down Airport
+Parkway to Macdonald-Cartier airport while G2 stays tight and
+residential (matches the ORIGINAL ground truth description exactly),
+Canotek G0 visibly follows Highway 174 northeast to Orleans and loops
+back, Smiths Falls G loops cleanly through town via a County Road 29
+substitution. Durations (OSRM free-flow, so real test time with stops
+would run longer) all plausible: Walkley G2 2.4-3.9km/6-8min, Walkley G
+14.5-22.1km/20-30min, Canotek G2 2.4-8.8km/6-17min, Canotek G
+13.5-19.9km/21-22min, Smiths Falls G2 4.1km/8min, Smiths Falls G
+12.6km/17min.
+
+**Two genuinely uncertain substitutions, flagged in `manual_routes.py`
+comments, need the user's own memory of the video (not resolvable from
+OSM data alone) to fully settle:**
+- Smiths Falls G: "Regional Rd" (appears twice) was resolved to County
+  Road 29, the only street that touches both of its real transcript
+  neighbors — but Jasper Avenue is ALSO a confirmed direct neighbor at
+  the same point, and the transcript's alternating "Regional
+  Rd"/"Jasper Ave" pattern reads just like an earlier
+  "Brockville"/"County Rd" pattern that WAS confirmed to be one road
+  under two names. Geometrically the resolved route is fine either way
+  (visually confirmed, no bad detour) — it's specifically which real
+  street the narrator meant that's unresolved.
+- Canotek G route1: "27" (as transcribed) doesn't exist as a street
+  anywhere near Canotek in this OSM extract; resolved to Highway 417.
+  Confidence raised after checking the geometry: it now shows a clean
+  Blair Rd -> Innes Rd -> "Merge onto Highway 417" -> Aviation Parkway
+  loop, which matches the transcript's "turn onto highway ramp ->
+  continue on Queensway" maneuver well.
+
+**Also handled, lower-confidence-but-resolved:** "Ottawa 34" dropped
+(almost certainly Montreal Rd's own route number, not a separate
+street). "Queensway" in Canotek G route0's transcript was DROPPED
+rather than used — in this OSM extract that name matches a rural road
+near Smiths Falls, not Highway 417/the real Ottawa Queensway; using it
+would have routed through the wrong region entirely. Walkley G route0's
+transcript is truncated (cuts off before returning to centre) —
+completed by continuing the last named street (Walkley Rd) back to the
+centre, no streets invented.
+
+**NOT done, deliberately:** `manual_routes.py` has no `--apply` path
+yet by design — the live DB currently holds `rebuild_routes.py`'s data
+with the WRONG route counts (8 rows: Walkley G=1/G2=3, Canotek
+G=1/G2=1, Smiths Falls G=1/G2=1), and replacing it with the correct 13
+should be a deliberate, reviewed action, not something done in the same
+pass as building the resolver. Whoever picks this up should: (1) have
+the user settle the two uncertain substitutions above if they still
+have the video open, (2) decide whether `manual_routes.py` should grow
+a `--apply` (mirroring `rebuild_routes.py`'s backup-then-DELETE/INSERT
+pattern) or whether the geojson should be reviewed by hand first, (3)
+if applying, note this REPLACES all `rebuild_routes`-sourced rows, it's
+not an additive merge — route counts genuinely change from 8 to 13.

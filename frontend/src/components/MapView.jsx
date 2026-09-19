@@ -197,9 +197,20 @@ function onEachFeature(feature, layer) {
       ? "<br/><i>Below the standard confidence threshold -- real, same-family " +
         "evidence, just weaker corroboration than a fully published route.</i>"
       : "";
+    // manual_youtube routes are hand-transcribed street-by-street from a
+    // real drive-test video by a person watching it, not crowdsourced/
+    // clustered like everything else here. "1 trace, 1 author" would
+    // undersell that (reads identical to one anonymous, unreliable Reddit
+    // post) -- and per the same principle that keeps predicted data from
+    // looking as strong as confirmed data, different provenance should
+    // never look the same as another kind just because a count matches.
+    const provenanceLine =
+      p.source === "manual_youtube"
+        ? `<b style="color:#2a7">&#10003; Hand-verified from a real DriveTest video</b><br/>`
+        : `${p.trace_count} traces, ${p.authors} authors<br/>`;
     layer.bindPopup(
       `<b>${classLabel} route -- family ${p.family}</b><br/>` +
-        `${p.trace_count} traces, ${p.authors} authors<br/>` +
+        provenanceLine +
         `${p.distance_m}m${confidenceNote}`
     );
   }
@@ -377,11 +388,13 @@ function buildRoutes(geojson) {
     const cls = f.properties.test_class || "unknown";
     const fam = f.properties.family;
     const key = `${cls}|${fam}`;
-    if (!byKey.has(key)) byKey.set(key, { key, cls, fam, features: [], traces: 0, authors: 0 });
+    if (!byKey.has(key))
+      byKey.set(key, { key, cls, fam, features: [], traces: 0, authors: 0, manualVerified: false });
     const r = byKey.get(key);
     r.features.push(f);
     r.traces = Math.max(r.traces, f.properties.trace_count || 0);
     r.authors = Math.max(r.authors, f.properties.authors || 0);
+    if (f.properties.source === "manual_youtube") r.manualVerified = true;
   }
   return [...byKey.values()];
 }
@@ -422,9 +435,13 @@ function RoutePanel({ centreId, geojson, route, center }) {
             {formatDistance(totalDist)}
             {totalDur ? `, ~${Math.round(totalDur / 60)} min driving` : ""}
           </b>{" "}
-          from {route.traces} source{route.traces === 1 ? "" : "s"}. This is one
-          reconstructed route; it may be partial where sources didn't cover every
-          street.
+          {route.manualVerified ? (
+            <span style={{ color: "#2a7" }}>&#10003; hand-verified from a real DriveTest video</span>
+          ) : (
+            <>from {route.traces} source{route.traces === 1 ? "" : "s"}</>
+          )}
+          . This is one reconstructed route; it may be partial where sources
+          didn't cover every street.
         </p>
       )}
       {gapCount > 0 && (
