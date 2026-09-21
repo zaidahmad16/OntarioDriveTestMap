@@ -17,19 +17,20 @@ of a single error message.
 
 import os
 import sqlite3
-import sys
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_BACKEND_DIR)
-for _sub in ("analysis", "common"):
-    _p = os.path.join(_REPO_ROOT, _sub)
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
 
-from streetnames import load_known, variants as name_variants  # noqa: E402
-from consensus_geometry import Graph  # noqa: E402
+# streetnames.py and consensus_geometry.py are vendored copies of
+# common/streetnames.py and analysis/consensus_geometry.py (2026-09-21,
+# fixing a Railway deploy crash: the Backend service's rootDirectory is
+# /backend, so anything outside that folder -- including common/ and
+# analysis/ -- doesn't exist in the deployed build at all). Keep these
+# in sync by hand if the originals change; not worth a build-time copy
+# step for a project this size.
+from streetnames import load_known, variants as name_variants
+from consensus_geometry import Graph
 
-OSM_DB_PATH = os.path.join(_REPO_ROOT, "data", "osm.db")
+OSM_DB_PATH = os.path.join(_BACKEND_DIR, "data", "osm.db")
 load_known(OSM_DB_PATH)
 
 
