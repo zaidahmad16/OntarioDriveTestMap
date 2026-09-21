@@ -71,11 +71,35 @@ def make_session_token(user: dict) -> str:
 def require_user(session: str | None = Cookie(default=None)) -> dict:
     """FastAPI dependency for any route that needs a signed-in user.
     A missing or invalid cookie is a 401, not a redirect -- that
-    decision belongs to the frontend, not this API."""
+    decision belongs to the frontend, not this API.
+
+    Sessions are stateless JWTs with no revocation list, so a session
+    issued before account deletion would otherwise stay valid for the
+    rest of its 7-day lifetime even after /account/delete runs on a
+    different device (SEC-002, 2026-09-21 security audit). Checking
+    deleted_at here -- on every authenticated request, not just the
+    ones that happen to call get_user_by_id -- closes that gap for any
+    endpoint behind this dependency, not just the ones that already did
+    a fresh DB lookup."""
     if not session:
         raise HTTPException(status_code=401, detail="Sign in required.")
     try:
         payload = jwt.decode(session, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Session expired or invalid.")
+
+    row = query(
+        "SELECT deleted_at FROM users WHERE id = %s", (payload["user_id"],), one=True
+    )
+    if row is None or row["deleted_at"] is not None:
+        raise HTTPException(status_code=401, detail="Session expired or invalid.")
+
     return payload
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """The JWT session only carries user_id/email -- username and
+    is_admin can change after a token is issued, so anything that needs
+    their current value looks them up fresh rather than trusting the
+    cookie."""
+    return query("SELECT * FROM users WHERE id = %s", (user_id,), one=True)
