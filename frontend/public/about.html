@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About — OntarioDriveTestMap</title>
+    <meta name="description" content="What OntarioDriveTestMap is, how the route data is built, and why confidence labeling matters." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --canvas: #f6f4ef; --text-primary: #171717;
+        --text-secondary: #65635e; --text-tertiary: #6b6864;
+        --border: #dddad3; --accent: #1b1b1a; --accent-hover: #292927;
+        --confirmed: #9f2f2d; --confirmed-tint: #fdebec;
+        --predicted: #6b4c8a; --predicted-tint: #f1ecf7;
+        --gap: #6b6b68; --gap-tint: #f0efed;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--canvas); color: var(--text-primary);
+        font-family: "Manrope", system-ui, sans-serif; line-height: 1.6;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 64px 24px 96px; }
+      a.back { color: var(--text-secondary); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+      a.back:hover { color: var(--text-primary); }
+      h1 {
+        font-family: "Newsreader", Georgia, serif; font-weight: 500;
+        font-size: 2.5rem; margin: 24px 0 4px; letter-spacing: -0.01em;
+      }
+      .tagline { color: var(--text-secondary); font-size: 1.0625rem; margin: 0 0 40px; max-width: 52ch; }
+      h2 {
+        font-family: "Manrope", sans-serif; font-weight: 700; font-size: 1.0625rem;
+        margin: 40px 0 12px;
+      }
+      p, li { color: var(--text-secondary); font-size: 0.9375rem; }
+      strong { color: var(--text-primary); }
+      ul { padding-left: 20px; margin: 8px 0 16px; }
+      li { margin: 4px 0; }
+      a { color: var(--accent); }
+      a:hover { color: var(--accent-hover); }
+      .badges { display: flex; gap: 8px; margin: 16px 0 24px; flex-wrap: wrap; }
+      .badge {
+        display: inline-flex; align-items: center; padding: 4px 10px;
+        border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+      }
+      .badge--confirmed { background: var(--confirmed-tint); color: var(--confirmed); }
+      .badge--predicted { background: var(--predicted-tint); color: var(--predicted); }
+      .badge--gap { background: var(--gap-tint); color: var(--gap); }
+      .note { border-left: 3px solid var(--border); padding: 4px 0 4px 14px; color: var(--text-tertiary); font-size: 0.85rem; margin: 16px 0; }
+      .footer-links { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 0.875rem; }
+      .footer-links a { margin-right: 16px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="/">← OntarioDriveTestMap</a>
+      <h1>About</h1>
+      <p class="tagline">A crowdsourced map of the DriveTest routes people actually drive — built from real evidence, not schematic guesses.</p>
+
+      <h2>The problem</h2>
+      <p>If you're studying for a G or G2 road test in Ontario, there's no official source telling you which streets your local DriveTest centre actually uses. What exists instead: template-clone sites that show a disclaimed "sample route" for free and gate the real one behind a purchase, or hand-drawn maps explicitly labeled "schematic, not to scale," assembled from anecdotes. Neither is built from anything you could call evidence.</p>
+
+      <h2>What this is instead</h2>
+      <p>OntarioDriveTestMap reconstructs routes from three real sources:</p>
+      <ul>
+        <li><strong>GPS traces</strong> — actual recorded drives along real DriveTest routes.</li>
+        <li><strong>Hand-transcribed test-drive videos</strong> — turn-by-turn instructions pulled from real footage.</li>
+        <li><strong>Community submissions</strong> — routes reported by people who've recently taken or driven a test, validated against real street data and corroborated against each other before being trusted.</li>
+      </ul>
+      <p>These sources are combined into a weighted graph of road segments, where a segment's weight reflects how many independent sources actually agree it belongs to a given route. Routes are reconstructed by walking that graph — not by anyone manually deciding what looks right.</p>
+
+      <h2>Confidence is data, not decoration</h2>
+      <p>Every route, and every section within a route, is labeled by how well-supported it actually is:</p>
+      <div class="badges">
+        <span class="badge badge--confirmed">Confirmed</span>
+        <span class="badge badge--predicted">Predicted</span>
+        <span class="badge badge--gap">Insufficient evidence</span>
+      </div>
+      <p>This distinction is never blurred for the sake of a cleaner-looking map. A driving-test candidate could physically execute a turn no one ever confirmed — so predicted or unverified sections are always drawn and labeled differently from confirmed ones, everywhere they appear.</p>
+
+      <h2>Who this is for</h2>
+      <p>Mostly first-time or anxious test-takers looking for the real streets and turns their local centre uses — often on a phone, often the night before a test, sometimes reviewed in the car itself. There's also a smaller community of contributors who've recently taken or driven a route, and centre-specific discussion where people swap tips and ask questions.</p>
+
+      <div class="note">OntarioDriveTestMap is an independent, community-built project. It is not affiliated with, endorsed by, sponsored by, or operated on behalf of DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</div>
+
+      <h2>Design philosophy</h2>
+      <p>This is built as a civic utility, not a product being sold — calm and legible for someone checking a route under real pressure, not slick for a screenshot. Low visual noise, real texture (actual street names, actual vote and source counts) over synthetic polish, and no urgency-manufacturing patterns.</p>
+
+      <div class="footer-links">
+        <a href="/">Home</a>
+        <a href="/discussion.html">Discussion</a>
+        <a href="/privacy-policy.html">Privacy</a>
+        <a href="/terms-of-service.html">Terms</a>
+        <a href="/cookie-policy.html">Cookies</a>
+      </div>
+    </div>
+  </body>
+</html>

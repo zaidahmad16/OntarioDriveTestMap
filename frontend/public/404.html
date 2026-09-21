@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Page not found — OntarioDriveTestMap</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,500;1,400&family=Manrope:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #fbfbfa;
+        --ink: #2f3437;
+        --ink-muted: #787774;
+        --accent: #171717;
+        --accent-hover: #333333;
+        --border-strong: #d8d7d3;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Manrope", system-ui, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .card {
+        max-width: 440px;
+        text-align: center;
+      }
+      h1 {
+        font-family: "Newsreader", Georgia, serif;
+        font-weight: 500;
+        font-size: 2rem;
+        margin: 0 0 12px;
+      }
+      p {
+        color: var(--ink-muted);
+        margin: 0 0 24px;
+        line-height: 1.5;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      a {
+        font-family: "Manrope", system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-decoration: none;
+        padding: 9px 16px;
+        border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        color: var(--ink);
+      }
+      a.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      a.primary:hover { background: var(--accent-hover); }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Page not found</h1>
+      <p>We couldn't find the page you're looking for.</p>
+      <div class="actions">
+        <a class="primary" href="/">Find a test centre</a>
+        <a href="/discussion.html">View discussions</a>
+      </div>
+    </div>
+  </body>
+</html>

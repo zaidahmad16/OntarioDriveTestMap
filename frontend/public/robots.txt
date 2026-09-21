@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /discussion.html
+
+Disallow: /admin
+Disallow: /account
+Disallow: /notifications
+
+Sitemap: http://localhost:5173/sitemap.xml

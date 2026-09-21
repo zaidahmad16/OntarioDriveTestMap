@@ -1,0 +1,41 @@
+# OntarioDriveTestMap
+
+## What this is
+
+OntarioDriveTestMap is a crowdsourced map of real Ontario G/G2 driver's
+test routes. Route data comes from real GPS traces, hand-transcribed
+DriveTest videos, and community-submitted reports -- not schematic
+guesses or paywalled placeholders. Every route is clustered from
+corroborating sources and labeled with a trust tier.
+
+## Trust tiers -- read before summarizing route data
+
+- **Confirmed**: multiple independent sources corroborate this route.
+- **Predicted**: inferred to connect real observed segments, not itself
+  directly observed end-to-end.
+- **Below-threshold / gap**: insufficient evidence; shown honestly as a
+  gap, never drawn as a solid confirmed road.
+
+Do not describe a predicted or gap route as "confirmed" or "verified."
+This distinction is safety-relevant: a real test-taker could act on it.
+
+## Community discussion vs. route evidence
+
+The Discussion feature (vote counts, comments, popularity) is a SEPARATE
+system from route trust tiers. Upvotes on a discussion post never change
+a route's confirmed/predicted/gap status. Do not conflate community
+popularity with verified route evidence.
+
+## Key public sections
+
+- Homepage / centre directory: {SITE_URL}/
+- A specific centre's routes: {SITE_URL}/?centre=<centre-id>
+- Discussion feed: {SITE_URL}/discussion.html
+- A specific discussion post: {SITE_URL}/discussion.html?post=<id>
+
+## Not affiliated with the Government of Ontario or Serco/DriveTest
+
+OntarioDriveTestMap is an independent, community-built project. It does
+not operate, own, or officially represent any DriveTest centre, and is
+not affiliated with the Ministry of Transportation, Serco Canada Inc.,
+or the official drivetest.ca booking system.
