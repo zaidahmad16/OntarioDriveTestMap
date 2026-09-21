@@ -1,7 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { MapContainer, TileLayer, GeoJSON, Marker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api.js";
+import { useLang } from "../i18n.jsx";
+import { formatTrafficControl, formatSpeedLimit, inferManeuver } from "../format.js";
+import LoadingScreen, { Spinner } from "../LoadingScreen.jsx";
+
+// Lazy: quiz mode and drive-along tracking are real features but not
+// needed for the initial route-detail paint -- keeping them out of the
+// main bundle means a visitor who never opens either never downloads
+// their code.
+const QuizMode = lazy(() => import("./QuizMode.jsx"));
+const DriveAlongControls = lazy(() => import("./DriveAlongMode.jsx"));
+const DriveAlongMarker = lazy(() =>
+  import("./DriveAlongMode.jsx").then((m) => ({ default: m.DriveAlongMarker }))
+);
+import { useSeo, breadcrumbList } from "../seo.js";
+import Breadcrumbs from "../Breadcrumbs.jsx";
+import {
+  FlagIcon,
+  InfoIcon,
+  ChevronDownIcon,
+  LayersIcon,
+  TurnLeftIcon,
+  TurnRightIcon,
+  StraightIcon,
+  MergeIcon,
+  RoundaboutIcon,
+  DestinationIcon,
+} from "../Icons.jsx";
+
+const MANEUVER_ICONS = {
+  left: TurnLeftIcon,
+  right: TurnRightIcon,
+  straight: StraightIcon,
+  merge: MergeIcon,
+  roundabout: RoundaboutIcon,
+  destination: DestinationIcon,
+};
 
 // Real DriveTest centre coordinates, from osm.db's centres table (the
 // OSM way for the actual DriveTest building/lot) -- not an approximate
@@ -14,14 +50,31 @@ const CENTRE_COORDS = {
   winchester: [45.0851023, -75.3712133],
 };
 
-const centreIcon = L.divIcon({
-  className: "",
-  html:
-    '<div style="width:12px;height:12px;border-radius:50%;background:#111;' +
-    'border:3px solid #ffd400;box-shadow:0 0 0 1px #111,0 1px 4px rgba(0,0,0,.6);"></div>',
-  iconSize: [12, 12],
-  iconAnchor: [6, 6],
-});
+// Hallmark audit finding (gate 58, token drift): these used to be hex
+// literals duplicating --confirmed/--gap/--accent, which already drifted
+// out of sync with the real tokens once this session (caught by hand).
+// Reading the live custom property instead means a future token edit in
+// App.css can never silently break the map's colors again. Read lazily
+// (not at module-eval time) so this never races the stylesheet's own
+// load -- by the time any of these run, the app has already painted
+// using these same tokens, so the stylesheet is guaranteed present.
+export function cssVar(name, fallback) {
+  if (typeof document === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+function makeCentreIcon() {
+  const ring = cssVar("--accent", "#14532d");
+  return L.divIcon({
+    className: "",
+    html:
+      `<div style="width:12px;height:12px;border-radius:50%;background:#111;` +
+      `border:3px solid ${ring};box-shadow:0 0 0 1px #111,0 1px 4px rgba(0,0,0,.6);"></div>`,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+}
 
 // Class color-coding (G orange / G2 blue) was dropped by explicit
 // request in favour of one uniform color for all real, sourced route
@@ -29,18 +82,9 @@ const centreIcon = L.divIcon({
 // shown in each line's popup text, just no longer color-coded. Real
 // data (confirmed AND below-threshold) is one solid red; nothing about
 // this touches the one tier that still MUST stay visually separate.
-const REAL_COLOR = "#e41a1c";
-
-// predicted: this is NOT sourced evidence -- it's a road-snapped guess
-// bridging two independently real, same-family points that no single
-// trace ever connected directly (see predict_family_bridges.py). Line
-// color/weight matches confirmed data exactly, by request. A permanent
-// on-map label per segment was tried and dropped -- with several
-// predicted segments clustered together it overlapped into unreadable
-// clutter. Identification now lives off the map: the ratio banner, the
-// instructions table's inline tag, and this color reserved for text/
-// tags rather than the line itself.
-const PREDICTED_COLOR = "#984ea3";
+function realColor() {
+  return cssVar("--confirmed", "#c0392b");
+}
 
 // A route line's road geometry comes from OSRM. When two consecutive
 // junctions sit on disconnected pieces of the road graph, OSRM still
@@ -51,7 +95,9 @@ const PREDICTED_COLOR = "#984ea3";
 // that does not exist. GAP_THRESHOLD_M is set above the largest real
 // sparse-road stretch in the data (~383 m) so only true beelines split.
 const GAP_THRESHOLD_M = 400;
-const GAP_COLOR = "#7f8c8d";
+function gapColor() {
+  return cssVar("--gap", "#6b7680");
+}
 
 function haversine(a, b) {
   // a, b are [lon, lat]
@@ -123,41 +169,80 @@ function isDegenerateRouteLine(feature) {
   return len < 5;
 }
 
-function routeLineStyle(feature) {
+// selectedLineId (a real route_line_id, set by clicking a turn in the
+// sidebar) makes that one segment visually dominant and dims its
+// siblings -- the map<->turn interaction from the 2026-09-21 spec. Never
+// touches trust color, only weight/opacity, so confirmed/predicted/gap
+// meaning stays exactly as before regardless of what's selected.
+function routeLineStyle(feature, selectedLineId) {
   const p = feature.properties;
   if (p.kind === "route_gap") {
     // Not a road: a straight, unrouted jump. Dashed + gray so it never
     // reads as confirmed driven geometry.
-    return { color: GAP_COLOR, weight: 3, dashArray: "4, 8", opacity: 0.9 };
+    const dimmed = selectedLineId != null;
+    return { color: gapColor(), weight: 3, dashArray: "4, 8", opacity: dimmed ? 0.5 : 0.9 };
   }
   if (p.kind !== "route_line") return {};
   // Confirmed, below-threshold, and predicted all render the same solid
   // red line now -- see onEachFeature for how predicted stays labeled.
-  return { color: REAL_COLOR, weight: 4 };
+  if (selectedLineId != null) {
+    const isSelected = p.route_line_id === selectedLineId;
+    return {
+      color: realColor(),
+      weight: isSelected ? 7 : 4,
+      opacity: isSelected ? 1 : 0.45,
+    };
+  }
+  return { color: realColor(), weight: 4 };
 }
 
-function pointToLayer(feature, latlng) {
-  const authors = feature.properties.authors || 1;
-  // Fade weakly-supported junctions so they read as secondary to the
-  // strongly-corroborated ones on the actual routes -- a single-author,
-  // weight-0.3 junction 6 km out shouldn't look as solid as a
-  // multi-author junction on a confirmed route.
-  const w = feature.properties.weight ?? 1;
-  const fillOpacity = Math.max(0.2, Math.min(0.7, 0.2 + w * 0.35));
-  return L.circleMarker(latlng, {
-    radius: 4 + Math.min(authors, 6),
-    fillColor: "#3388ff",
-    color: "#3388ff",
-    weight: 1,
-    fillOpacity,
-  });
+// weight ranges roughly 0-1 in this app's data (consensus_geometry.py);
+// clamp defensively since a heatmap color must always be well-defined.
+function weightColor(w) {
+  const c = Math.max(0, Math.min(1, w));
+  // red (low corroboration) -> yellow -> green (high corroboration)
+  const hue = c * 120;
+  return `hsl(${hue}, 75%, 45%)`;
+}
+
+// Confidence heatmap (backlog: "visually weight each street segment by
+// how many independent traces confirm it") reuses the same weight/
+// authors data already scored by consensus_geometry.py and already
+// returned per junction point -- no new data collection, just a second
+// color encoding of what's already on the map.
+function makePointToLayer(heatmap) {
+  return function pointToLayer(feature, latlng) {
+    const authors = feature.properties.authors || 1;
+    const w = feature.properties.weight ?? 1;
+    if (heatmap) {
+      return L.circleMarker(latlng, {
+        radius: 5 + Math.min(authors, 6),
+        fillColor: weightColor(w),
+        color: weightColor(w),
+        weight: 1,
+        fillOpacity: 0.75,
+      });
+    }
+    // Fade weakly-supported junctions so they read as secondary to the
+    // strongly-corroborated ones on the actual routes -- a single-author,
+    // weight-0.3 junction 6 km out shouldn't look as solid as a
+    // multi-author junction on a confirmed route.
+    const fillOpacity = Math.max(0.2, Math.min(0.7, 0.2 + w * 0.35));
+    return L.circleMarker(latlng, {
+      radius: 4 + Math.min(authors, 6),
+      fillColor: "#3388ff",
+      color: "#3388ff",
+      weight: 1,
+      fillOpacity,
+    });
+  };
 }
 
 function onEachFeature(feature, layer) {
   const p = feature.properties;
   if (p.kind === "route_gap") {
     layer.bindPopup(
-      `<b style="color:#7f8c8d">⚠ Unrouted gap -- not a road</b><br/>` +
+      `<b style="color:var(--gap)">⚠ Unrouted gap -- not a road</b><br/>` +
         `The route data jumps ~${p.gap_m} m straight here: the two ends sit ` +
         `on road segments that don't connect in the map data, so this ` +
         `stretch is a straight line across the gap, <b>not a driven road</b>.<br/>` +
@@ -183,7 +268,7 @@ function onEachFeature(feature, layer) {
       // detail on click. The ratio banner covers the "at a glance"
       // case without needing a label physically on every line.
       layer.bindPopup(
-        `<b style="color:#984ea3">⚠ PREDICTED -- not sourced</b><br/>` +
+        `<b style="color:var(--predicted)">⚠ PREDICTED -- not sourced</b><br/>` +
           `Road-snapped guess connecting two real, confirmed points that no ` +
           `trace directly walked between. Family ${p.family}, ~${p.distance_m}m.<br/>` +
           `<b>Do not treat this as a confirmed turn-by-turn instruction.</b>`
@@ -206,7 +291,7 @@ function onEachFeature(feature, layer) {
     // never look the same as another kind just because a count matches.
     const provenanceLine =
       p.source === "manual_youtube"
-        ? `<b style="color:#2a7">&#10003; Hand-verified from a real DriveTest video</b><br/>`
+        ? `<b style="color:var(--success)">&#10003; Hand-verified from a real DriveTest video</b><br/>`
         : `${p.trace_count} traces, ${p.authors} authors<br/>`;
     layer.bindPopup(
       `<b>${classLabel} route -- family ${p.family}</b><br/>` +
@@ -269,7 +354,7 @@ function FitToData({ geojson, centreLatLng }) {
   return null;
 }
 
-function formatDistance(m) {
+export function formatDistance(m) {
   if (m == null) return "";
   return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(2)} km`;
 }
@@ -330,27 +415,117 @@ function sumUniqueLegDurationS(rows) {
 // simply because most streets in this extract aren't tagged with
 // either (checked directly: ~4.7% of ways have a maxspeed at all).
 // Blank cell means "not tagged," never a guessed default.
-function formatTrafficControl(kind) {
-  if (kind === "traffic_signals") return "Traffic light";
-  if (kind === "stop") return "Stop sign";
-  return "";
-}
-
-function formatSpeedLimit(v) {
-  if (!v) return "";
-  return /^\d+$/.test(v) ? `${v} km/h` : v; // plain number = km/h in this region; "45 mph" etc. kept as-is
-}
-
 // ONE turn-by-turn list for the whole route. lines is a single route's
 // pieces (one family); flatten them into one continuous numbered list.
 // A mid-route "Arrive at destination" is just where one collected piece
 // ended, not the end of the drive, so only the very last one is kept.
-function InstructionsTable({ lines }) {
+function ReportErrorButton({ routeLineId, stepOrder }) {
+  const { t } = useLang();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState(false);
+
+  if (sent) return <span style={{ fontSize: "0.85em", color: "var(--success)" }}>{t("reportErrorSent")}</span>;
+  if (!open)
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        title={t("reportError")}
+        aria-label={t("reportError")}
+        style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-muted)" }}
+      >
+        <FlagIcon />
+      </button>
+    );
+  return (
+    <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={t("reportErrorPrompt")}
+        style={{ fontSize: "0.85em", width: 140 }}
+      />
+      <button
+        onClick={() =>
+          api
+            .reportError(routeLineId, stepOrder, note || null)
+            .then(() => setSent(true))
+        }
+        style={{ fontSize: "0.85em" }}
+      >
+        {t("submit")}
+      </button>
+      <button onClick={() => setOpen(false)} style={{ fontSize: "0.85em" }}>
+        {t("cancel")}
+      </button>
+    </span>
+  );
+}
+
+// One vertical row per turn -- the row shape every real navigation app
+// uses (a step number/icon, the instruction, a compact meta line under
+// it), replacing the old dense data-grid table that forced horizontal
+// scrolling inside the sidebar. Still real semantic list markup
+// (<ol>/<li>) for accessibility; a field only renders when the
+// underlying data actually has it (never an empty "At junction" cell
+// reserved just because the table used to have that column).
+function TurnFeedRow({ step, index, selected, onSelect }) {
+  const maneuver = inferManeuver(step.instruction);
+  const Icon = maneuver && MANEUVER_ICONS[maneuver];
+  const junction = formatTrafficControl(step.traffic_control);
+  const speed = formatSpeedLimit(step.speed_limit);
+  const metaParts = [];
+  if (step.distance_m) metaParts.push(formatDistance(step.distance_m));
+  if (step.duration_s) metaParts.push(formatDuration(step.duration_s));
+  // A step's parent route_line is the finest granularity the map data
+  // carries (multiple steps can share one line) -- selecting a turn
+  // highlights that whole segment, not the single sub-slice of road this
+  // exact turn happens on, which the underlying geometry doesn't
+  // separately track.
+  const clickable = step.routeLineId != null && onSelect;
+
+  return (
+    <li
+      className={`turn-feed__row${step.predicted ? " turn-feed__row--predicted" : ""}${
+        clickable ? " turn-feed__row--clickable" : ""
+      }${selected ? " turn-feed__row--selected" : ""}`}
+      onClick={clickable ? () => onSelect(step.routeLineId) : undefined}
+      aria-selected={selected || undefined}
+    >
+      <span className="turn-feed__marker">
+        {Icon ? <Icon /> : <span className="turn-feed__index">{index + 1}</span>}
+      </span>
+      <span className="turn-feed__body">
+        <span className="turn-feed__instruction">
+          {step.instruction}
+          {step.predicted && (
+            <span className="trust-badge trust-badge--predicted turn-feed__badge">predicted</span>
+          )}
+        </span>
+        {(metaParts.length > 0 || junction || speed) && (
+          <span className="turn-feed__meta">
+            {metaParts.length > 0 && <span className="data">{metaParts.join(" · ")}</span>}
+            {junction && <span>{junction}</span>}
+            {speed && <span className="data">{speed}</span>}
+          </span>
+        )}
+      </span>
+      {step.routeLineId != null && (
+        <span className="turn-feed__flag no-print">
+          <ReportErrorButton routeLineId={step.routeLineId} stepOrder={step.step_order} />
+        </span>
+      )}
+    </li>
+  );
+}
+
+function TurnFeed({ lines, selectedLineId, onSelectLine }) {
   const rows = [];
   for (const l of lines) {
     const predicted = l.properties.predicted;
+    const routeLineId = l.properties.route_line_id;
     for (const s of l.properties.steps || []) {
-      rows.push({ ...s, predicted });
+      rows.push({ ...s, predicted, routeLineId });
     }
   }
   const steps = rows.filter(
@@ -368,59 +543,30 @@ function InstructionsTable({ lines }) {
   const totalDistanceM = isManual
     ? sumOrNull(lines.map((l) => l.properties.distance_m))
     : steps.reduce((a, r) => a + (r.distance_m || 0), 0);
-  // manual_youtube steps repeat a leg's real duration on every line
-  // covering it (see totalDistanceM above) -- sumUniqueLegDurationS
-  // dedupes consecutive repeats instead of multiplying the real time by
-  // however many lines describe that leg. Non-manual steps are already
-  // one row per real leg, no dedup needed.
   const hasRealDuration = steps.some((r) => r.duration_s);
   const totalDurS = isManual ? sumUniqueLegDurationS(steps) : steps.reduce((a, r) => a + (r.duration_s || 0), 0);
   const durationText = hasRealDuration && totalDurS > 0 ? `, ${formatDurationTotal(totalDurS)}` : "";
 
   return (
-    <div style={{ marginTop: 12 }}>
-      <p style={{ fontSize: "0.9em", marginBottom: 4 }}>
-        <b>Total: {formatDistance(totalDistanceM)}{durationText}</b> for this
-        route.
+    <div id="turn-feed" style={{ marginTop: "var(--space-md)" }}>
+      <p className="turn-feed__total">
+        <b>
+          Total: <span className="data">{formatDistance(totalDistanceM)}</span>
+          {durationText}
+        </b>{" "}
+        for this route.
       </p>
-      <p style={{ fontSize: "0.85em", color: "#555", marginBottom: 6 }}>
-        Distances and durations are calculated by routing software between the
-        collected data points, not measured from a live drive.{" "}
-        <span style={{ background: "#f5eaf7", padding: "0 3px" }}>Shaded rows</span> are
-        predicted (a road-snapped guess, see banner above), not sourced from a trace.
-        Junction and speed-limit data is real OSM tagging where available -- blank means
-        untagged, not "none."
-      </p>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9em" }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #333" }}>
-            <th style={{ padding: "4px 8px" }}>#</th>
-            <th style={{ padding: "4px 8px" }}>Instruction</th>
-            <th style={{ padding: "4px 8px" }}>Distance</th>
-            <th style={{ padding: "4px 8px" }}>Duration</th>
-            <th style={{ padding: "4px 8px" }}>At junction</th>
-            <th style={{ padding: "4px 8px" }}>Speed limit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {steps.map((r, i) => (
-            <tr
-              key={i}
-              style={{
-                background: r.predicted ? "#f5eaf7" : i % 2 ? "#f7f7f7" : "white",
-                borderBottom: "1px solid #eee",
-              }}
-            >
-              <td style={{ padding: "4px 8px" }}>{i + 1}</td>
-              <td style={{ padding: "4px 8px" }}>{r.instruction}</td>
-              <td style={{ padding: "4px 8px" }}>{formatDistance(r.distance_m)}</td>
-              <td style={{ padding: "4px 8px" }}>{formatDuration(r.duration_s)}</td>
-              <td style={{ padding: "4px 8px" }}>{formatTrafficControl(r.traffic_control)}</td>
-              <td style={{ padding: "4px 8px" }}>{formatSpeedLimit(r.speed_limit)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <ol className="turn-feed">
+        {steps.map((r, i) => (
+          <TurnFeedRow
+            key={i}
+            step={r}
+            index={i}
+            selected={selectedLineId != null && r.routeLineId === selectedLineId}
+            onSelect={onSelectLine}
+          />
+        ))}
+      </ol>
     </div>
   );
 }
@@ -460,102 +606,409 @@ function routesForClass(routes, cls) {
     .sort((a, b) => b.traces - a.traces || a.fam - b.fam);
 }
 
-function RoutePanel({ centreId, geojson, route, center }) {
-  const lineFeatures = route ? route.features.filter((f) => !isDegenerateRouteLine(f)) : [];
-  // consensus junction dots stay visible regardless of which route is
-  // selected -- they carry no class/family, they're the raw evidence layer.
-  const segPoints = geojson.features.filter((f) => f.properties.kind === "segment");
-  // split THIS route's lines at beeline gaps for the map; keep them un-split
-  // for the instructions table so a line's OSRM steps aren't duplicated.
-  const mapData = {
-    type: "FeatureCollection",
-    features: [...lineFeatures.flatMap(splitAtGaps), ...segPoints],
-  };
-  const gapCount = mapData.features.filter((f) => f.properties.kind === "route_gap").length;
-  const predictedCount = lineFeatures.filter((f) => f.properties.predicted).length;
-
-  // per-ROUTE distance/duration (one route, not every route summed).
-  const steps = lineFeatures.flatMap((f) => f.properties.steps || []);
-  // manual_youtube steps repeat a leg's real duration on every
-  // transcript line covering it -- summing every row multiplies the
-  // real driving time by however many lines describe that leg (caught
-  // live: a real ~5min route was showing "~14 min driving"). Dedupe
-  // consecutive repeats the same way totalDist's sibling column does.
-  const totalDur = route && route.manualVerified
-    ? sumUniqueLegDurationS(steps)
-    : steps.reduce((a, s) => a + (s.duration_s || 0), 0);
-  // manual_youtube routes show the owner's own transcript lines as
-  // instructions (see manual_routes.py's TRANSCRIPT), which don't carry
-  // a real per-step distance -- summing steps would silently show "0 m"
-  // for a route that's actually several km. The route's own real,
-  // OSRM-measured distance_m (always present regardless of step
-  // wording) is the honest total here.
-  const totalDist = route && route.manualVerified
-    ? sumOrNull(lineFeatures.map((f) => f.properties.distance_m))
-    : steps.reduce((a, s) => a + (s.distance_m || 0), 0);
-
+// One trust-tier badge, reused everywhere a route's provenance is shown
+// (route-selector chip + panel summary) so the tiering can never drift
+// between the two spots the way the old duplicated inline JSX could.
+// Never blurs predicted/below-threshold into looking like confirmed --
+// same principle CentreList already follows for the confirmed count.
+function TrustBadge({ route }) {
+  const { t } = useLang();
+  if (route.manualVerified) {
+    return <span className="trust-badge trust-badge--success">✓ {t("verified")}</span>;
+  }
   return (
-    <div>
-      {route && (
-        <p style={{ fontSize: "0.9em", marginBottom: 6 }}>
-          <b>
-            {formatDistance(totalDist)}
-            {totalDur ? `, ~${Math.round(totalDur / 60)} min driving` : ""}
-          </b>{" "}
-          {route.manualVerified ? (
-            <span style={{ color: "#2a7" }}>&#10003; hand-verified from a real DriveTest video</span>
-          ) : (
-            <>from {route.traces} source{route.traces === 1 ? "" : "s"}</>
-          )}
-          . This is one reconstructed route; it may be partial where sources
-          didn't cover every street.
-        </p>
+    <span className="trust-badge trust-badge--gap">
+      {route.traces} {t("src")}
+      {route.authors ? ` · ${route.authors} ${route.authors === 1 ? "author" : "authors"}` : ""}
+    </span>
+  );
+}
+
+function DifficultyBadge({ lineFeatures }) {
+  const { t } = useLang();
+  const scored = lineFeatures.filter((f) => f.properties.difficulty_score != null);
+  if (!scored.length) return null;
+  // one route can be several stitched line pieces; take the hardest
+  // piece's label rather than averaging away a genuinely hard stretch.
+  const worst = scored.reduce((a, b) =>
+    b.properties.difficulty_score > a.properties.difficulty_score ? b : a
+  );
+  const tier = { Easy: "success", Moderate: "warning", Hard: "confirmed" }[worst.properties.difficulty_label];
+  return (
+    <span style={{ marginLeft: 8 }}>
+      {t("difficulty")}:{" "}
+      <span className={`trust-badge trust-badge--${tier}`}>{worst.properties.difficulty_label}</span>
+    </span>
+  );
+}
+
+// GPX is plain XML over geometry already fetched for the map -- no
+// backend endpoint needed, built client-side from the same coordinates
+// Leaflet is already drawing.
+function downloadGpx(route, lineFeatures, centreId) {
+  const points = lineFeatures.flatMap((f) => f.geometry.coordinates);
+  const trkpts = points
+    .map(([lon, lat]) => `<trkpt lat="${lat}" lon="${lon}"></trkpt>`)
+    .join("\n      ");
+  const gpx =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<gpx version="1.1" creator="OntarioDriveTestMap">\n` +
+    `  <trk><name>${centreId}-${route.cls}-${route.fam}</name><trkseg>\n      ${trkpts}\n` +
+    `  </trkseg></trk>\n</gpx>\n`;
+  const blob = new Blob([gpx], { type: "application/gpx+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${centreId}-${route.cls}-route${route.fam}.gpx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Groups GPX/PDF behind one "Export ▾" trigger instead of two buttons
+// with the same visual weight as the primary practice-drive action.
+// Only the two export formats the app actually supports -- no invented
+// options.
+function ExportMenu({ onGpx, onPdf }) {
+  const { t } = useLang();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="export-menu no-print">
+      <button onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open}>
+        {t("exportLabel")} <ChevronDownIcon />
+      </button>
+      {open && (
+        <div className="popover popover-panel export-menu__panel" role="menu">
+          <button
+            role="menuitem"
+            className="popover-row"
+            onClick={() => {
+              onGpx();
+              setOpen(false);
+            }}
+          >
+            {t("exportGpx")}
+          </button>
+          <button
+            role="menuitem"
+            className="popover-row"
+            onClick={() => {
+              onPdf();
+              setOpen(false);
+            }}
+          >
+            {t("exportPdf")}
+          </button>
+        </div>
       )}
-      {gapCount > 0 && (
-        <p style={{ background: "#f0f1f2", border: "1px solid #7f8c8d", color: "#4d5656", padding: "6px 10px", borderRadius: 4, fontSize: "0.85em", marginBottom: 8 }}>
-          {gapCount} <b>unrouted gap{gapCount === 1 ? "" : "s"}</b> shown{" "}
-          <span style={{ color: "#7f8c8d", fontWeight: "bold" }}>dashed gray</span>: the
-          data jumps straight where the two ends don't connect on the road map -- not a
-          driven road.
-        </p>
-      )}
-      {predictedCount > 0 && (
-        <p style={{ background: "#f5eaf7", border: "1px solid #984ea3", color: "#5c1f66", padding: "6px 10px", borderRadius: 4, fontSize: "0.85em", marginBottom: 8 }}>
-          Parts of this route are{" "}
-          <span style={{ color: "#984ea3", fontWeight: "bold" }}>predicted</span> -- a
-          road-snapped guess connecting two real points no single source drove between,
-          tagged in the instructions below. Not a confirmed turn-by-turn.
-        </p>
-      )}
-      <MapContainer
-        key={`${centreId}-${route ? route.key : "none"}`}
-        center={center}
-        zoom={13}
-        style={{ height: "600px", width: "100%" }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-        <Marker position={center} icon={centreIcon}>
-          <Tooltip permanent direction="top" offset={[0, -12]}>
-            <b>DriveTest Centre</b>
-          </Tooltip>
-        </Marker>
-        <GeoJSON
-          data={mapData}
-          style={routeLineStyle}
-          pointToLayer={pointToLayer}
-          onEachFeature={onEachFeature}
-        />
-        <FitToData geojson={mapData} centreLatLng={center} />
-      </MapContainer>
-      <InstructionsTable lines={lineFeatures} />
     </div>
   );
 }
 
-export default function MapView({ centreId }) {
+// A small floating control over the map, matching how real mapping
+// apps surface optional overlays -- only the one layer this app
+// actually supports (the confidence heatmap encoding already built
+// from consensus_geometry.py's own weight/author data), not a menu of
+// invented toggles.
+function LayersControl({ heatmap, onChange }) {
+  const { t } = useLang();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="map-layers-control no-print">
+      <button onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open} title={t("layers")}>
+        <LayersIcon /> {t("layers")}
+      </button>
+      {open && (
+        <div className="popover popover-panel map-layers-control__panel">
+          <label className="map-layers-control__row">
+            <input type="checkbox" checked={heatmap} onChange={(e) => onChange(e.target.checked)} />
+            {t("confidenceView")}
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Static app copy explaining the app's own real, already-implemented
+// trust tiers -- not a data fetch, so nothing here can drift out of
+// sync with a live value; it's just naming what the colors already
+// mean everywhere else in the UI (DESIGN.md's Never-Blur Rule).
+function ConfidenceInfoModal({ onClose }) {
+  const { t } = useLang();
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel card" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>{t("confidenceModalTitle")}</h3>
+        <p>
+          <span className="trust-badge trust-badge--confirmed">confirmed</span>
+          <br />
+          <span style={{ fontSize: "0.875rem", color: "var(--ink-muted)" }}>{t("confidenceConfirmedExplainer")}</span>
+        </p>
+        <p>
+          <span className="trust-badge trust-badge--predicted">predicted</span>
+          <br />
+          <span style={{ fontSize: "0.875rem", color: "var(--ink-muted)" }}>{t("confidencePredictedExplainer")}</span>
+        </p>
+        <p>
+          <span className="trust-badge trust-badge--gap">gap</span>
+          <br />
+          <span style={{ fontSize: "0.875rem", color: "var(--ink-muted)" }}>{t("confidenceGapExplainer")}</span>
+        </p>
+        <button onClick={onClose}>{t("close")}</button>
+      </div>
+    </div>
+  );
+}
+
+function RoutePanel({ centreId, centreName, classFilter, routeIndex, geojson, route, center, selector }) {
+  const { t } = useLang();
+  const [heatmap, setHeatmap] = useState(false);
+  const [driveAlongLive, setDriveAlongLive] = useState(null);
+  const [confidenceInfoOpen, setConfidenceInfoOpen] = useState(false);
+  const [selectedLineId, setSelectedLineId] = useState(null);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+
+  // A turn selection belongs to the route it was made on -- switching
+  // routes (or the class filter) should never leave a stale segment
+  // highlighted on the new route's map.
+  useEffect(() => {
+    setSelectedLineId(null);
+  }, [route]);
+  // Derived purely from `route`/`geojson` props -- memoized so unrelated
+  // state changes (heatmap toggle, confidence modal, and especially
+  // driveAlongLive, which updates on every GPS tick during a live
+  // practice drive) don't re-run these filters/flatMaps on every render.
+  const { lineFeatures, mapData, gapCount, predictedCount, steps, totalDur, totalDist } = useMemo(() => {
+    const lineFeatures = route ? route.features.filter((f) => !isDegenerateRouteLine(f)) : [];
+    // consensus junction dots stay visible regardless of which route is
+    // selected -- they carry no class/family, they're the raw evidence layer.
+    const segPoints = geojson.features.filter((f) => f.properties.kind === "segment");
+    // split THIS route's lines at beeline gaps for the map; keep them un-split
+    // for the instructions table so a line's OSRM steps aren't duplicated.
+    const mapData = {
+      type: "FeatureCollection",
+      features: [...lineFeatures.flatMap(splitAtGaps), ...segPoints],
+    };
+    const gapCount = mapData.features.filter((f) => f.properties.kind === "route_gap").length;
+    const predictedCount = lineFeatures.filter((f) => f.properties.predicted).length;
+
+    // per-ROUTE distance/duration (one route, not every route summed).
+    const steps = lineFeatures.flatMap((f) => f.properties.steps || []);
+    // manual_youtube steps repeat a leg's real duration on every
+    // transcript line covering it -- summing every row multiplies the
+    // real driving time by however many lines describe that leg (caught
+    // live: a real ~5min route was showing "~14 min driving"). Dedupe
+    // consecutive repeats the same way totalDist's sibling column does.
+    const totalDur = route && route.manualVerified
+      ? sumUniqueLegDurationS(steps)
+      : steps.reduce((a, s) => a + (s.duration_s || 0), 0);
+    // manual_youtube routes show the owner's own transcript lines as
+    // instructions (see manual_routes.py's TRANSCRIPT), which don't carry
+    // a real per-step distance -- summing steps would silently show "0 m"
+    // for a route that's actually several km. The route's own real,
+    // OSRM-measured distance_m (always present regardless of step
+    // wording) is the honest total here.
+    const totalDist = route && route.manualVerified
+      ? sumOrNull(lineFeatures.map((f) => f.properties.distance_m))
+      : steps.reduce((a, s) => a + (s.distance_m || 0), 0);
+
+    return { lineFeatures, mapData, gapCount, predictedCount, steps, totalDur, totalDist };
+  }, [route, geojson]);
+
+  const routeLabel = route ? `${classFilter} ${t("route")} ${routeIndex + 1}` : null;
+  useSeo(
+    route
+      ? {
+          title: `${centreName} — ${classFilter} ${t("route")} ${routeIndex + 1} — OntarioDriveTestMap`,
+          description: `Study ${centreName} ${classFilter} Route ${routeIndex + 1} with turn-by-turn instructions, route confidence information and community-backed evidence.`,
+          path: `/?centre=${encodeURIComponent(centreId)}`,
+          breadcrumbJsonLd: breadcrumbList([
+            { name: t("centres"), path: "/" },
+            { name: centreName, path: `/?centre=${encodeURIComponent(centreId)}` },
+            { name: routeLabel },
+          ]),
+        }
+      : undefined
+  );
+
+  return (
+    <div className="route-shell">
+      <div className={`route-sidebar${sheetExpanded ? " route-sidebar--expanded" : ""}`}>
+        <button
+          type="button"
+          className="route-sidebar__handle no-print"
+          aria-label={sheetExpanded ? t("collapseRouteSheet") : t("expandRouteSheet")}
+          aria-expanded={sheetExpanded}
+          onClick={() => setSheetExpanded((v) => !v)}
+        />
+        {route && (
+          <Breadcrumbs
+            items={[
+              { name: t("centres"), href: "/" },
+              { name: centreName, href: `/?centre=${encodeURIComponent(centreId)}` },
+              { name: routeLabel },
+            ]}
+          />
+        )}
+        <div className="route-title">
+          {centreName && (
+            <p className="route-title__eyebrow">
+              {centreName} · {classFilter} {t("roadTest")}
+            </p>
+          )}
+          <h2 className="route-title__heading">
+            {t("route")} {route ? routeIndex + 1 : ""}
+          </h2>
+        </div>
+
+        {route && (
+          <div className="route-status">
+            <div className="route-status__badges">
+              <TrustBadge route={route} />
+              <DifficultyBadge lineFeatures={lineFeatures} />
+            </div>
+            <p className="route-status__meta">
+              <span className="data">{formatDistance(totalDist)}</span>
+              {totalDur ? (
+                <>
+                  {" · about "}
+                  <span className="data">{Math.round(totalDur / 60)} min</span>
+                </>
+              ) : null}
+            </p>
+            <p className="route-status__evidence">
+              <button className="link-btn" onClick={() => setConfidenceInfoOpen(true)}>
+                {t("howConfidenceWorks")}
+              </button>
+            </p>
+          </div>
+        )}
+
+        {route && (
+          <details className="disclosure">
+            <summary>
+              <InfoIcon /> {t("aboutThisRoute")} <ChevronDownIcon className="disclosure__chevron" />
+            </summary>
+            <p>{t("routeReconstructedNote")}</p>
+          </details>
+        )}
+
+        {gapCount > 0 && (
+          <p className="trust-banner trust-banner--gap">
+            <span>
+              {gapCount} <strong>unrouted gap{gapCount === 1 ? "" : "s"}</strong> shown{" "}
+              <strong>dashed gray</strong>: the data jumps straight where the two ends don't
+              connect on the road map -- not a driven road.
+            </span>
+          </p>
+        )}
+        {predictedCount > 0 && (
+          <p className="trust-banner trust-banner--predicted">
+            <span>
+              Parts of this route are <strong>predicted</strong> -- a road-snapped guess
+              connecting two real points no single source drove between, tagged in the
+              instructions below. Not a confirmed turn-by-turn.
+            </span>
+          </p>
+        )}
+
+        {route && lineFeatures.length > 0 && (
+          <Suspense fallback={<div className="suspense-fallback"><Spinner /></div>}>
+            <DriveAlongControls
+              key={route.key}
+              lineFeatures={lineFeatures}
+              onUpdate={setDriveAlongLive}
+            />
+          </Suspense>
+        )}
+
+        {route && (
+          <div className="action-row no-print">
+            <button
+              onClick={() =>
+                document.getElementById("turn-feed")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              {t("studyTurns")}
+            </button>
+            <Suspense fallback={<Spinner size={16} />}>
+              <QuizMode lineFeatures={lineFeatures} />
+            </Suspense>
+            <ExportMenu
+              onGpx={() => downloadGpx(route, lineFeatures, centreId)}
+              onPdf={() => window.print()}
+            />
+          </div>
+        )}
+
+        {route && (
+          <div className="card discussion-link-card" style={{ marginBottom: "var(--space-md)" }}>
+            <span className="discussion-link-card__text">{t("discussionAboutRoute")}</span>
+            <a
+              className="link-btn"
+              href={`/discussion.html?centre=${encodeURIComponent(centreId)}&route=${encodeURIComponent(
+                lineFeatures[0]?.properties.route_line_id || ""
+              )}&type=${encodeURIComponent(classFilter)}&compose=1`}
+            >
+              {t("askAboutRoute")}
+            </a>
+          </div>
+        )}
+
+        <div className="route-alternatives">{selector}</div>
+
+        <TurnFeed
+          lines={lineFeatures}
+          selectedLineId={selectedLineId}
+          onSelectLine={(id) => setSelectedLineId((cur) => (cur === id ? null : id))}
+        />
+
+        {confidenceInfoOpen && <ConfidenceInfoModal onClose={() => setConfidenceInfoOpen(false)} />}
+      </div>
+
+      <div className="route-map-pane no-print">
+        <LayersControl heatmap={heatmap} onChange={setHeatmap} />
+        <MapContainer
+          key={centreId}
+          center={center}
+          zoom={13}
+          style={{ height: "600px", width: "100%" }}
+        >
+          {/* className applies to the tile container -- a restrained CSS
+              desaturation so the base map recedes and the route line
+              dominates, without touching any trust color (2026-09-21
+              spec: "slightly reduce the visual intensity of the base
+              OSM map without harming readability"). */}
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="&copy; OpenStreetMap contributors"
+            className="ontario-tiles"
+          />
+          <Marker position={center} icon={makeCentreIcon()}>
+            <Tooltip permanent direction="top" offset={[0, -12]}>
+              <b>DriveTest Centre</b>
+            </Tooltip>
+          </Marker>
+          <GeoJSON
+            data={mapData}
+            style={(feature) => routeLineStyle(feature, selectedLineId)}
+            pointToLayer={makePointToLayer(heatmap)}
+            onEachFeature={onEachFeature}
+            eventHandlers={{ click: () => setSelectedLineId(null) }}
+          />
+          <FitToData geojson={mapData} centreLatLng={center} />
+          <Suspense fallback={null}>
+            <DriveAlongMarker live={driveAlongLive} />
+          </Suspense>
+        </MapContainer>
+      </div>
+      <style>{"@media print { .no-print { display: none !important; } }"}</style>
+    </div>
+  );
+}
+
+export default function MapView({ centreId, centreName }) {
+  const { t } = useLang();
   const [geojson, setGeojson] = useState(null);
   const [error, setError] = useState(null);
   const [classFilter, setClassFilter] = useState(null);
@@ -589,8 +1042,8 @@ export default function MapView({ centreId }) {
     };
   }, [centreId]);
 
-  if (error) return <p style={{ color: "red" }}>Error: {error}</p>;
-  if (!geojson) return <p>Loading map…</p>;
+  if (error) return <p style={{ color: "red" }}>{t("error")}: {error}</p>;
+  if (!geojson) return <LoadingScreen label={t("loadingMap")} />;
 
   const center = CENTRE_COORDS[centreId] || [45, -76];
   const routes = buildRoutes(geojson);
@@ -608,19 +1061,27 @@ export default function MapView({ centreId }) {
     // yet. Show the evidence points and say so plainly rather than a blank map.
     return (
       <div>
-        <p style={{ fontSize: "0.9em", color: "#555" }}>
-          No route reconstructed for this centre yet -- the collected sources cover
-          individual junctions (shown below) but not enough of a connected path to
-          draw a route. The dots are the real evidence gathered so far.
-        </p>
-        <RoutePanel centreId={centreId} geojson={geojson} route={null} center={center} />
+        <p style={{ fontSize: "0.9em", color: "var(--ink-muted)" }}>{t("noRoute")}</p>
+        <RoutePanel
+          centreId={centreId}
+          centreName={centreName}
+          classFilter={classFilter}
+          routeIndex={0}
+          geojson={geojson}
+          route={null}
+          center={center}
+        />
       </div>
     );
   }
 
-  return (
-    <div>
-      <div style={{ marginBottom: 8 }}>
+  // Segmented G/G2 control + a Google-Maps-directions-style list of route
+  // alternatives -- rendered once, passed into RoutePanel's sidebar so it
+  // sits above the route summary instead of floating above the whole
+  // shell (map included) the way two separately-stacked blocks used to.
+  const selector = (
+    <>
+      <div className="segmented">
         {["G", "G2"].map((c) => {
           const n = routesForClass(routes, c).length;
           return (
@@ -629,45 +1090,51 @@ export default function MapView({ centreId }) {
               onClick={() => selectClass(c)}
               disabled={!n}
               title={n ? `${n} route${n === 1 ? "" : "s"}` : "no routes"}
-              style={{
-                marginRight: 6,
-                padding: "4px 12px",
-                fontWeight: classFilter === c ? "bold" : "normal",
-                border: classFilter === c ? "2px solid #333" : "1px solid #ccc",
-                cursor: n ? "pointer" : "not-allowed",
-                opacity: n ? 1 : 0.4,
-              }}
+              aria-pressed={classFilter === c}
+              style={{ cursor: n ? "pointer" : "not-allowed", opacity: n ? 1 : 0.4 }}
             >
               {c}
             </button>
           );
         })}
       </div>
-      {/* one button per distinct route in the selected class, popular first */}
-      <div style={{ marginBottom: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {classRoutes.map((r, i) => (
-          <button
-            key={r.key}
-            onClick={() => setRouteKey(r.key)}
-            style={{
-              padding: "4px 10px",
-              fontSize: "0.9em",
-              fontWeight: routeKey === r.key ? "bold" : "normal",
-              border: routeKey === r.key ? "2px solid #e41a1c" : "1px solid #ccc",
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
-          >
-            Route {i + 1}
-            {i === 0 ? " ★" : ""}{" "}
-            <span style={{ color: r.manualVerified ? "#2a7" : "#777", fontWeight: "normal" }}>
-              · {r.manualVerified ? "✓ verified" : `${r.traces} src`}
-              {r.cls === "unknown" ? " · class ?" : ""}
-            </span>
-          </button>
-        ))}
-      </div>
-      <RoutePanel centreId={centreId} geojson={geojson} route={selected} center={center} />
-    </div>
+      {classRoutes.map((r, i) => (
+        <button
+          key={r.key}
+          onClick={() => setRouteKey(r.key)}
+          className={`route-alt${routeKey === r.key ? " route-alt--selected" : ""}`}
+        >
+          <span className="route-alt__headline">
+            {t("route")} {i + 1}
+            {i === 0 ? " ★" : ""}
+          </span>
+          <div className="route-alt__meta">
+            {r.manualVerified ? (
+              <span className="trust-badge trust-badge--success">✓ {t("verified")}</span>
+            ) : (
+              <span className="trust-badge trust-badge--gap">
+                {r.traces} {t("src")}
+              </span>
+            )}
+            {r.cls === "unknown" ? ` · ${t("classUnknown")}` : ""}
+          </div>
+        </button>
+      ))}
+    </>
+  );
+
+  const routeIndex = selected ? classRoutes.findIndex((r) => r.key === selected.key) : 0;
+
+  return (
+    <RoutePanel
+      centreId={centreId}
+      centreName={centreName}
+      classFilter={classFilter}
+      routeIndex={routeIndex < 0 ? 0 : routeIndex}
+      geojson={geojson}
+      route={selected}
+      center={center}
+      selector={selector}
+    />
   );
 }

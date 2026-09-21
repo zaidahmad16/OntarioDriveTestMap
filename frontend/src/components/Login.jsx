@@ -9,9 +9,16 @@ export default function Login({ onLogin }) {
   useEffect(() => {
     // Google's script loads async via a <script> tag in index.html, so it
     // may not exist yet on first render -- poll briefly rather than assume.
+    // `cancelled` stops the poll on unmount -- without it, a slow/blocked
+    // Google script (ad-blocker, slow network) left this polling forever,
+    // every 100ms, for the rest of the tab's life if the user navigated
+    // away before it ever loaded (found in a 2026-09-21 cleanup pass).
+    let cancelled = false;
+    let timeoutId;
     const tryInit = () => {
+      if (cancelled) return;
       if (!window.google || !buttonRef.current) {
-        setTimeout(tryInit, 100);
+        timeoutId = setTimeout(tryInit, 100);
         return;
       }
       window.google.accounts.id.initialize({
@@ -31,6 +38,10 @@ export default function Login({ onLogin }) {
       });
     };
     tryInit();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [onLogin]);
 
   return <div ref={buttonRef} />;
