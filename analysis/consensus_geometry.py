@@ -400,6 +400,21 @@ def order_walk(seg, keep):
         adj[a].append((b, k))
         adj[b].append((a, k))
 
+    def walk_from(cur):
+        out = []
+        while True:
+            nxt = None
+            for other, k in adj[cur]:
+                if k in unused:
+                    nxt = (other, k)
+                    break
+            if not nxt:
+                return out
+            other, k = nxt
+            unused.discard(k)
+            out.append(k)
+            cur = other
+
     unused = set(keep)
     runs = []
     while unused:
@@ -411,19 +426,22 @@ def order_walk(seg, keep):
         # of runs. Sorting makes the street name itself the tiebreak.
         start = max(sorted({s for k in unused for s in k}),
                     key=lambda s: len([1 for _, k in adj[s] if k in unused]))
-        run, cur = [], start
-        while True:
-            nxt = None
-            for other, k in adj[cur]:
-                if k in unused:
-                    nxt = (other, k)
-                    break
-            if not nxt:
-                break
-            other, k = nxt
-            unused.discard(k)
-            run.append(k)
-            cur = other
+        run = walk_from(start)
+        # A plain waypoint (exactly 2 streets ever meet here, i.e. a
+        # pass-through, not a real branch) walked from its middle only
+        # extends one way and stops -- the other half of the SAME
+        # straight path then looked like a second, disconnected run
+        # purely because of where the walk happened to start. Found on
+        # a real 2-3 segment case: build_route_feature() needs >=2
+        # points to draw a line, so the orphaned single-edge remainder
+        # silently vanished instead of joining its other half. A real
+        # branch (3+ streets meeting at one point) must still split into
+        # separate runs -- only continue backward through an actual
+        # pass-through point, never through a genuine junction.
+        if len(adj[start]) == 2:
+            back = walk_from(start)
+            if back:
+                run = list(reversed(back)) + run
         if run:
             runs.append(run)
     return runs
