@@ -70,6 +70,7 @@ export default function DiscussionPage() {
           <div className="app-header__actions">
             <NotificationBell signedIn={!!user} />
             <a href="/" className="header-link">{t("backToRoutes")}</a>
+            <a href="/about.html" className="header-link">{t("about")}</a>
             <div className="lang-toggle">
               {["en", "fr"].map((l) => (
                 <button key={l} onClick={() => setLang(l)} aria-current={lang === l}>

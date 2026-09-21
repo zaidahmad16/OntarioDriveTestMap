@@ -135,6 +135,7 @@ export default function App() {
           <div className="app-header__actions">
             <NotificationBell signedIn={!!user} />
             {user && <BookingReminderButton centres={centres} />}
+            <a href="/about.html" className="header-link">{t("about")}</a>
             <a href="/discussion.html" className="header-link">{t("discussion")}</a>
             <button className="btn-primary" onClick={() => setSubmitOpen(true)}>{t("submitRoute")}</button>
             <div className="lang-toggle">

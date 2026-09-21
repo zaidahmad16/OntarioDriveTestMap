@@ -87,6 +87,25 @@
 
       <div class="note">OntarioDriveTestMap is an independent, community-built project. It is not affiliated with, endorsed by, sponsored by, or operated on behalf of DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</div>
 
+      <h2>How a route actually gets on the map</h2>
+      <p>Nothing appears here because one person decided it looked right. A route only shows up once real evidence points to it, and it only gets labeled "Confirmed" once enough of that evidence agrees:</p>
+      <ul>
+        <li><strong>A trace, transcription, or submission comes in.</strong> Each one is checked against real Ontario street-network data before it's accepted — a street that doesn't exist, or two streets that don't actually connect, gets rejected at that point, not silently included.</li>
+        <li><strong>It's checked against everyone else's.</strong> The clustering pipeline groups submissions that describe the same physical route together, and weighs each one by how many independent people or sources back it up. A single unconfirmed report doesn't outrank a well-corroborated one.</li>
+        <li><strong>Confidence is computed, not chosen.</strong> Once a cluster of agreeing evidence crosses a real threshold, the route is promoted to Confirmed automatically. Below that threshold, it stays visible but honestly labeled Predicted or Insufficient evidence — it's never quietly upgraded to look more certain than it is.</li>
+      </ul>
+
+      <h2>How to help</h2>
+      <p>This map only gets better with more real evidence behind it. A few ways to contribute, all from inside the app:</p>
+      <ul>
+        <li><strong>Submit a route</strong> if you've recently driven or taken a test at a centre — the submission wizard walks through it street by street and checks each one against the real road network as you go.</li>
+        <li><strong>Report an error</strong> directly on a turn-by-turn instruction if something looks wrong — this feeds the same evidence system, not a black hole.</li>
+        <li><strong>Use the forum and Discussion board</strong> to share what actually happened on your test, ask questions, or flag a route that's changed. Community reports are one of the three real data sources this map is built from, not a separate comment section bolted on top.</li>
+      </ul>
+
+      <h2>Coverage and honest limitations</h2>
+      <p>Coverage varies by centre — some have years of corroborated traces and video transcriptions behind them; newer or smaller centres may have thin or no data yet, and that's shown plainly rather than papered over with a guess. Routes can also genuinely change over time (construction, new signage, a centre updating its test pattern), and this map reflects what's been observed and reported, not a live feed from DriveTest itself — treat it as strong evidence about what's likely, not a guarantee of what you'll be asked to drive on test day.</p>
+
       <h2>Design philosophy</h2>
       <p>This is built as a civic utility, not a product being sold — calm and legible for someone checking a route under real pressure, not slick for a screenshot. Low visual noise, real texture (actual street names, actual vote and source counts) over synthetic polish, and no urgency-manufacturing patterns.</p>
 
