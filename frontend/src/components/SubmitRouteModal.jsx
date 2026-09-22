@@ -193,6 +193,11 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
           <p>{t("signInForSubmit")}</p>
         ) : (
           <>
+            {w.step === 1 && (
+              <p className="notice-banner" style={{ marginBottom: "var(--space-md)" }}>
+                {t("submissionImportanceNote")}
+              </p>
+            )}
             <StepIndicator step={w.step} />
 
             {w.step === 1 && (
