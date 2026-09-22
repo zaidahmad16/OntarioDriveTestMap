@@ -12,6 +12,9 @@ import BookingReminderButton from "./components/BookingReminderButton.jsx";
 import { useSeo } from "./seo.js";
 import Breadcrumbs from "./Breadcrumbs.jsx";
 import LoadingScreen, { Spinner } from "./LoadingScreen.jsx";
+import SubmissionReminderPopup from "./components/SubmissionReminderPopup.jsx";
+
+const SUBMISSION_REMINDER_KEY = "odtm_submission_reminder_shown";
 
 // Lazy: neither renders on first paint (compare is opt-in, the submit
 // modal is closed by default) -- keeping them out of the initial bundle
@@ -28,6 +31,7 @@ export default function App() {
   const [centresError, setCentresError] = useState(null);
   const [selectedCentre, setSelectedCentre] = useState(null);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -69,6 +73,20 @@ export default function App() {
       .catch(() => setUser(null))
       .finally(() => setCheckedAuth(true));
   }, []);
+
+  // Owner's own request (2026-09-21): a real pop-up, not buried text,
+  // reminding signed-in users that submitted route data matters -- shown
+  // once per browser session (sessionStorage, not localStorage, so it
+  // resurfaces on a genuinely new visit rather than being dismissed once
+  // and gone forever). Not gated on whether this user has submitted
+  // before -- no per-user submission-count endpoint exists, and adding
+  // one just for this would be scope creep on a simple reminder.
+  useEffect(() => {
+    if (!user) return;
+    if (sessionStorage.getItem(SUBMISSION_REMINDER_KEY)) return;
+    setReminderOpen(true);
+    sessionStorage.setItem(SUBMISSION_REMINDER_KEY, "1");
+  }, [user]);
 
   // Lets a Discussion post's "View centre discussion" / "Ask a question"
   // links round-trip back to the right centre (?centre=<id>) instead of
@@ -270,6 +288,16 @@ export default function App() {
             signedIn={!!user}
           />
         </Suspense>
+      )}
+
+      {reminderOpen && (
+        <SubmissionReminderPopup
+          onSubmitRoute={() => {
+            setReminderOpen(false);
+            setSubmitOpen(true);
+          }}
+          onDismiss={() => setReminderOpen(false)}
+        />
       )}
       </main>
 
