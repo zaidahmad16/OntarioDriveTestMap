@@ -998,6 +998,7 @@ function RoutePanel({ centreId, centreName, classFilter, routeIndex, geojson, ro
             </Tooltip>
           </Marker>
           <GeoJSON
+            key={route ? route.key : "none"}
             data={mapData}
             style={(feature) => routeLineStyle(feature, selectedLineId)}
             pointToLayer={makePointToLayer(heatmap)}
