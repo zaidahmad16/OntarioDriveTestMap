@@ -14,7 +14,8 @@ import Breadcrumbs from "./Breadcrumbs.jsx";
 import LoadingScreen, { Spinner } from "./LoadingScreen.jsx";
 import SubmissionReminderPopup from "./components/SubmissionReminderPopup.jsx";
 
-const SUBMISSION_REMINDER_KEY = "odtm_submission_reminder_shown";
+const SUBMISSION_REMINDER_KEY = "odtm_submission_reminder_last_shown";
+const SUBMISSION_REMINDER_INTERVAL_MS = 3600 * 1000;
 
 // Lazy: neither renders on first paint (compare is opt-in, the submit
 // modal is closed by default) -- keeping them out of the initial bundle
@@ -75,17 +76,32 @@ export default function App() {
   }, []);
 
   // Owner's own request (2026-09-21): a real pop-up, not buried text,
-  // reminding signed-in users that submitted route data matters -- shown
-  // once per browser session (sessionStorage, not localStorage, so it
-  // resurfaces on a genuinely new visit rather than being dismissed once
-  // and gone forever). Not gated on whether this user has submitted
-  // before -- no per-user submission-count endpoint exists, and adding
-  // one just for this would be scope creep on a simple reminder.
+  // reminding signed-in users that submitted route data matters --
+  // recurring every SUBMISSION_REMINDER_INTERVAL_MS (currently 3600s),
+  // not just once. Uses localStorage (not sessionStorage) so the
+  // countdown survives a page reload instead of restarting every visit
+  // -- the timer is real wall-clock time since it last showed, not
+  // "once per tab session." Not gated on whether this user has
+  // submitted before -- no per-user submission-count endpoint exists,
+  // and adding one just for this would be scope creep on a simple
+  // reminder. Not reset by dismissing it early ("Maybe later") -- it's
+  // a fixed cadence, not a snooze.
   useEffect(() => {
     if (!user) return;
-    if (sessionStorage.getItem(SUBMISSION_REMINDER_KEY)) return;
-    setReminderOpen(true);
-    sessionStorage.setItem(SUBMISSION_REMINDER_KEY, "1");
+    let timer;
+    const showAndScheduleNext = () => {
+      setReminderOpen(true);
+      localStorage.setItem(SUBMISSION_REMINDER_KEY, String(Date.now()));
+      timer = setTimeout(showAndScheduleNext, SUBMISSION_REMINDER_INTERVAL_MS);
+    };
+    const lastShown = Number(localStorage.getItem(SUBMISSION_REMINDER_KEY) || 0);
+    const elapsed = Date.now() - lastShown;
+    if (!lastShown || elapsed >= SUBMISSION_REMINDER_INTERVAL_MS) {
+      showAndScheduleNext();
+    } else {
+      timer = setTimeout(showAndScheduleNext, SUBMISSION_REMINDER_INTERVAL_MS - elapsed);
+    }
+    return () => clearTimeout(timer);
   }, [user]);
 
   // Lets a Discussion post's "View centre discussion" / "Ask a question"
