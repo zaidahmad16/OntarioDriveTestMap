@@ -348,6 +348,14 @@ function FitToData({ geojson, centreLatLng }) {
     const bounds = L.geoJSON({ type: "FeatureCollection", features: framingSet }).getBounds();
     if (centreLatLng) bounds.extend(centreLatLng); // never crop the centre out of view
     if (bounds.isValid()) {
+      // Sidebar content height changes per route (gap-notice box, turn
+      // count, etc.), but that reflow doesn't touch the map container's
+      // own dimensions -- Leaflet still sometimes fits against a stale
+      // cached size after a route switch, producing a zoom/pan that
+      // doesn't actually contain the drawn line until the user manually
+      // interacts with the map. invalidateSize() forces a fresh
+      // measurement immediately before fitting.
+      map.invalidateSize();
       map.fitBounds(bounds, { padding: [30, 30] });
     }
   }, [geojson, centreLatLng, map]);
