@@ -204,7 +204,7 @@ export default function DriveAlongControls({ lineFeatures, onUpdate }) {
   const percent = totalM ? Math.min(100, Math.round((traveledM / totalM) * 100)) : 0;
 
   return (
-    <div className="no-print" style={{ marginBottom: "var(--space-md)", fontSize: "0.875rem" }}>
+    <div className="no-print mobile-only" style={{ marginBottom: "var(--space-md)", fontSize: "0.875rem" }}>
       {!tracking ? (
         <button onClick={start} className="btn-primary">
           {t("startDriveAlong")}

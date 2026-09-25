@@ -652,6 +652,20 @@ table {
   filter: grayscale(28%) contrast(96%) brightness(101%);
 }
 
+/* Hidden by default (desktop); shown only under the mobile breakpoint.
+   For features that only make sense on a phone in a moving car (e.g.
+   live drive-along GPS practice) -- a desktop user has no reason to
+   see a "start practice drive" control they can never meaningfully use. */
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .mobile-only {
+    display: block;
+  }
+}
+
 /* Mobile: map first (large, so the geometry is the first thing seen),
    route detail as a stacked, independently-scrolling sheet below it --
    never a multi-column table, never horizontal scroll. */
