@@ -1,7 +1,14 @@
 export default function CentreList({ centres, selected, onSelect }) {
+  // Hide centres with genuinely nothing to show yet (0 traces, 0
+  // segments -- e.g. Winchester as of 2026-09) from the browsing grid.
+  // Not removed from the underlying `centres` data itself: it still
+  // needs to be a valid choice in the submission wizard/forum/discussion
+  // centre dropdowns, since someone contributing the first real data for
+  // it is exactly how it stops being empty.
+  const visible = centres.filter((c) => c.trace_count > 0 || c.segment_count > 0);
   return (
     <ul className="centre-grid">
-      {centres.map((c, i) => {
+      {visible.map((c, i) => {
         const confirmed = c.confirmed_route_line_count ?? c.route_line_count;
         const inferred = c.route_line_count - confirmed;
         return (
