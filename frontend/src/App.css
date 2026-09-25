@@ -493,31 +493,23 @@ table {
   border-color: transparent;
 }
 
+/* Reuses .segmented's pill styling (same component as the G/G2 route
+   toggle) instead of the old plain-text underline treatment -- a real
+   bordered control reads as clickable, and its fixed two-letter labels
+   (EN/FR) never change width between languages, so it can't itself
+   contribute to the header wrapping the way free-text nav items can
+   (2026-09-21, in response to the French header visibly breaking onto
+   a second line). Margin/sizing overridden here since .segmented's
+   defaults (margin-bottom, larger touch targets) are tuned for the
+   route-alternatives list, not a tightly packed header row. */
 .lang-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-family: var(--font-ui);
-  font-size: 0.8125rem;
-  font-weight: 600;
+  margin-bottom: 0;
+  font-size: 0.75rem;
 }
 
 .lang-toggle button {
-  background: none;
-  border: none;
-  padding: 4px 2px;
-  color: var(--ink-muted);
-  border-bottom: 1px solid transparent;
-}
-
-.lang-toggle button:hover {
-  background: none;
-  color: var(--ink);
-}
-
-.lang-toggle button[aria-current="true"] {
-  color: var(--ink);
-  border-bottom-color: var(--ink);
+  min-height: auto;
+  padding: 4px 8px;
 }
 
 /* ------------------------------------------------------------------ */

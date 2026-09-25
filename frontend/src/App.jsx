@@ -172,9 +172,9 @@ export default function App() {
             <a href="/about.html" className="header-link">{t("about")}</a>
             <a href="/discussion.html" className="header-link">{t("discussion")}</a>
             <button className="btn-primary" onClick={() => setSubmitOpen(true)}>{t("submitRoute")}</button>
-            <div className="lang-toggle">
+            <div className="segmented lang-toggle">
               {["en", "fr"].map((l) => (
-                <button key={l} onClick={() => setLang(l)} aria-current={lang === l}>
+                <button key={l} onClick={() => setLang(l)} aria-pressed={lang === l}>
                   {l.toUpperCase()}
                 </button>
               ))}

@@ -71,9 +71,9 @@ export default function DiscussionPage() {
             <NotificationBell signedIn={!!user} />
             <a href="/" className="header-link">{t("backToRoutes")}</a>
             <a href="/about.html" className="header-link">{t("about")}</a>
-            <div className="lang-toggle">
+            <div className="segmented lang-toggle">
               {["en", "fr"].map((l) => (
-                <button key={l} onClick={() => setLang(l)} aria-current={lang === l}>
+                <button key={l} onClick={() => setLang(l)} aria-pressed={lang === l}>
                   {l.toUpperCase()}
                 </button>
               ))}
