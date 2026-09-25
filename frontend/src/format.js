@@ -1,7 +1,5 @@
 // Shared display formatting for real per-step data (traffic_control /
-// speed_limit tags from route_line_steps). Split out of MapView.jsx so
-// QuizMode.jsx can reuse the exact same display text instead of a second
-// copy that could drift from it.
+// speed_limit tags from route_line_steps).
 
 export function formatTrafficControl(kind) {
   if (kind === "traffic_signals") return "Traffic light";

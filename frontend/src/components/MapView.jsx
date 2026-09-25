@@ -10,7 +10,6 @@ import LoadingScreen, { Spinner } from "../LoadingScreen.jsx";
 // needed for the initial route-detail paint -- keeping them out of the
 // main bundle means a visitor who never opens either never downloads
 // their code.
-const QuizMode = lazy(() => import("./QuizMode.jsx"));
 const DriveAlongControls = lazy(() => import("./DriveAlongMode.jsx"));
 const DriveAlongMarker = lazy(() =>
   import("./DriveAlongMode.jsx").then((m) => ({ default: m.DriveAlongMarker }))
@@ -932,16 +931,6 @@ function RoutePanel({ centreId, centreName, classFilter, routeIndex, geojson, ro
 
         {route && (
           <div className="action-row no-print">
-            <button
-              onClick={() =>
-                document.getElementById("turn-feed")?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-            >
-              {t("studyTurns")}
-            </button>
-            <Suspense fallback={<Spinner size={16} />}>
-              <QuizMode lineFeatures={lineFeatures} />
-            </Suspense>
             <ExportMenu
               onGpx={() => downloadGpx(route, lineFeatures, centreId)}
               onPdf={() => window.print()}
