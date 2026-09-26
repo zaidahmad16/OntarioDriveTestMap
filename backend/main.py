@@ -1,10 +1,16 @@
 """
 main.py — OntarioDriveTestMap API.
 
-Centre listings are public (a landing page needs something to show before
-anyone signs in). Actual route geometry -- the thing this whole project
-exists to produce -- requires a signed-in Google account, checked via the
-`session` cookie on every request to /centres/{id}/map and beyond.
+Public, read-only (owner decision 2026-09-25, guest-landing spec §4):
+centre listings, published route maps + turn text (/centres/{id}/map),
+the confirmed-route comparison, and per-centre evidence COUNTS
+(/centres/{id}/evidence-summary). Anyone can study a route.
+
+Signed-in only: raw source records (/centres/{id}/traces, /traces/{id} --
+they carry ingestion ids and author hashes), the forum and discussion,
+submissions, reports, reminders, notifications and every other write.
+Identity is required to contribute, not to read. Reads stay under the
+global 60/minute per-IP rate limit.
 """
 
 import os
@@ -12,6 +18,7 @@ import re
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -19,6 +26,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from turn_anchors import anchors_for_line
 from auth import (
     get_or_create_user,
     get_user_by_id,
@@ -27,7 +35,7 @@ from auth import (
     verify_google_token,
 )
 from db import execute, query
-from submissions import junction_point, street_exists, validate_pair, validate_streets
+from submissions import OSM_DB_PATH, junction_point, street_exists, validate_pair, validate_streets
 from forum import (
     COMMENT_DAILY_LIMIT,
     POST_DAILY_LIMIT,
@@ -42,12 +50,15 @@ import discussions
 from notifications import notify_comment, notify_mentions
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+# Comma-separated list allowed (e.g. apex + a staging host); the first
+# entry is the canonical site URL used in links.
+ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in FRONTEND_ORIGIN.split(",") if o.strip()]
 
 app = FastAPI(title="OntarioDriveTestMap API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,  # required for the httpOnly session cookie
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,6 +91,8 @@ async def security_headers(request, call_next):
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+# JSON map payloads are ~90 KB raw / ~15 KB gzipped (measured 2026-09-25).
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -374,10 +387,49 @@ def search_users(q: str = "", user=Depends(require_user)):
     )
 
 
+# ------------------------------------------------------ public caching ---
+# Public route data only changes when the offline pipeline or the
+# promotion script runs, so the anonymous read endpoints are cached in
+# memory for a few minutes and marked cacheable for browsers/CDNs. A
+# deploy/restart clears the cache; the worst case after a data rebuild is
+# PUBLIC_CACHE_S of staleness.
+import time as _time
+
+PUBLIC_CACHE_S = 300
+_public_cache = {}
+
+
+def cached_public(key, compute):
+    hit = _public_cache.get(key)
+    now = _time.monotonic()
+    if hit and now - hit[0] < PUBLIC_CACHE_S:
+        return hit[1]
+    value = compute()
+    _public_cache[key] = (now, value)
+    return value
+
+
+def known_centre_or_404(centre_id: str):
+    """Only real centres reach the per-centre caches: otherwise any made-up
+    id would add an entry, letting anyone grow this process's memory."""
+    ids = cached_public("centre_ids", lambda: {r["id"] for r in query("SELECT id FROM centres")})
+    if centre_id not in ids:
+        raise HTTPException(status_code=404, detail="No such centre.")
+
+
+def public_cache_headers(response: Response):
+    response.headers["Cache-Control"] = f"public, max-age=60, stale-while-revalidate={PUBLIC_CACHE_S}"
+
+
 # ------------------------------------------------------------- centres ---
 
 @app.get("/centres")
-def list_centres():
+def list_centres(response: Response):
+    public_cache_headers(response)
+    return cached_public("centres", lambda: _list_centres())
+
+
+def _list_centres():
     return query(
         """
         SELECT c.id, c.name,
@@ -386,7 +438,12 @@ def list_centres():
                COUNT(DISTINCT rl.id) AS route_line_count,
                COUNT(DISTINCT rl.id) FILTER (
                    WHERE NOT rl.predicted AND NOT rl.below_threshold
-               ) AS confirmed_route_line_count
+               ) AS confirmed_route_line_count,
+               -- Distinct route families per class, so the centre index
+               -- can say whether G and/or G2 routes exist at all instead
+               -- of implying every centre has both.
+               COUNT(DISTINCT rl.family) FILTER (WHERE rl.test_class = 'G')  AS g_route_count,
+               COUNT(DISTINCT rl.family) FILTER (WHERE rl.test_class = 'G2') AS g2_route_count
         FROM centres c
         LEFT JOIN traces t             ON t.centre_id = c.id
         LEFT JOIN consensus_segments cs ON cs.centre_id = c.id
@@ -398,7 +455,12 @@ def list_centres():
 
 
 @app.get("/centres/compare")
-def compare_centres(user=Depends(require_user)):
+def compare_centres(response: Response):
+    public_cache_headers(response)
+    return cached_public("compare", lambda: _compare_centres())
+
+
+def _compare_centres():
     """Real distance/duration/maneuver-count stats per centre, confirmed
     routes only (predicted/below_threshold excluded -- a comparison view
     built partly on unsourced guesses would mislead). No pass-rate column:
@@ -452,8 +514,42 @@ def get_centre(centre_id: str):
     return row
 
 
+@app.get("/centres/{centre_id}/evidence-summary")
+def evidence_summary(centre_id: str, response: Response):
+    known_centre_or_404(centre_id)
+    public_cache_headers(response)
+    return cached_public(("evidence", centre_id), lambda: _evidence_summary(centre_id))
+
+
+def _evidence_summary(centre_id: str):
+    """Public, count-only view of a centre's source records -- what a guest
+    needs for the "Evidence for this centre" section without exposing the
+    records themselves (ingestion ids, author hashes stay behind
+    /centres/{id}/traces, which requires sign-in). The video/community
+    split uses the same source_id prefix rule as the frontend, so the two
+    counts always partition the total. Registered before any
+    /centres/{centre_id} catch-alls would matter (distinct path suffix)."""
+    return query(
+        """
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE source_id LIKE 'youtube%%') AS video,
+               COUNT(*) FILTER (WHERE source_id NOT LIKE 'youtube%%') AS community
+        FROM traces
+        WHERE centre_id = %s
+        """,
+        (centre_id,),
+        one=True,
+    )
+
+
 @app.get("/centres/{centre_id}/map")
-def get_map(centre_id: str, user=Depends(require_user)):
+def get_map(centre_id: str, response: Response):
+    known_centre_or_404(centre_id)
+    public_cache_headers(response)
+    return cached_public(("map", centre_id), lambda: _get_map(centre_id))
+
+
+def _get_map(centre_id: str):
     """One GeoJSON FeatureCollection: route lines (if any exist for this
     centre -- Smiths Falls currently has none, that's real, not a bug)
     plus every scored junction as its own point feature.
@@ -509,6 +605,15 @@ def get_map(centre_id: str, user=Depends(require_user)):
     for line in lines:
         steps = steps_by_line.get(line["id"], [])
         difficulty = compute_difficulty(steps, line["distance_m"])
+        # Real map position for each maneuver, matched from the step's own
+        # street names to an OSM junction ON this route (turn_anchors.py).
+        # None = not matched; the step stays text-only, never guessed.
+        try:
+            anchors = anchors_for_line(line["id"], steps, line["geometry"] or [], OSM_DB_PATH)
+        except Exception:
+            anchors = [None] * len(steps)
+        for st, an in zip(steps, anchors):
+            st["anchor"] = an
         features.append(
             {
                 "type": "Feature",

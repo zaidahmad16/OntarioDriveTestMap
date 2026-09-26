@@ -15,18 +15,23 @@ import os
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor
 
-# Public URL first: it works from a laptop AND from Railway. The internal
-# .railway.internal host only resolves from inside Railway's own network,
-# so it's useless here and would only be needed if this env var came
-# pre-set by Railway itself on a deployed service, which is checked second.
-DATABASE_URL = (
-    os.environ.get("DATABASE_PUBLIC_URL")
-    or os.environ.get("DATABASE_URL")
-)
+# On Railway, use the PRIVATE DATABASE_URL (postgres.railway.internal):
+# same data centre, no TLS hop through the public TCP proxy. Measured
+# 2026-09-25: the public proxy cost ~0.3-0.5 s per query, and every API
+# request paid it. Railway sets RAILWAY_ENVIRONMENT_NAME on deployed
+# services. Off Railway (a laptop), the internal host doesn't resolve, so
+# prefer DATABASE_PUBLIC_URL there.
+_ON_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))
+if _ON_RAILWAY:
+    DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("DATABASE_PUBLIC_URL")
+else:
+    DATABASE_URL = os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("Set DATABASE_URL (or DATABASE_PUBLIC_URL) in the environment.")
 
-_pool = pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+# Threaded, not Simple: FastAPI runs sync endpoints on a thread pool, and
+# SimpleConnectionPool isn't safe to share across threads.
+_pool = pool.ThreadedConnectionPool(1, 10, DATABASE_URL)
 
 
 def get_conn():
@@ -34,7 +39,9 @@ def get_conn():
 
 
 def put_conn(conn):
-    _pool.putconn(conn)
+    # A connection the server dropped (idle timeout, restart) must not go
+    # back into the pool to fail the next request.
+    _pool.putconn(conn, close=bool(conn.closed))
 
 
 def query(sql, params=None, one=False):
