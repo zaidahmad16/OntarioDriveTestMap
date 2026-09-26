@@ -68,83 +68,7 @@ Public reads are cached for 5 minutes server-side and sent with `Cache-Control`.
 | Data | PostgreSQL (app data), SQLite `osm.db` (road network and junctions), Python pipeline (numpy, scipy, scikit-learn) |
 | Hosting | Railway (Frontend, Backend and Postgres services), Cloudflare DNS, Resend for the admin weekly digest |
 
-**Domains:** `ontariodrivetestmap.fyi` and `www.` → Frontend service (`www` redirects to the apex in the page head); `api.ontariodrivetestmap.fyi` → Backend service. Keeping the API on a subdomain of the same site is what lets the `SameSite=Lax` session cookie work. Cloudflare records for Railway must be **DNS only** (grey cloud) so Railway can issue certificates.
-
----
-
-## Local development
-
-**Prerequisites:** Node 18+, Python 3.11+, access to the Postgres database.
-
-**1. Environment**
-
-Repo-root `.env` (read by the backend; never committed):
-
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_PUBLIC_URL` | Postgres URL reachable from your machine (used locally) |
-| `DATABASE_URL` | Private Railway URL; preferred automatically when running on Railway |
-| `JWT_SECRET` | Signs session cookies |
-| `GOOGLE_CLIENT_ID` | Google Sign-In client ID (token verification) |
-| `FRONTEND_ORIGIN` | Allowed CORS origin(s), comma-separated. Default `http://localhost:5173` |
-| `RESEND_API_KEY`, `RESEND_FROM` | Optional: weekly admin digest email |
-
-`frontend/.env`:
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_API_URL` | Backend base URL, e.g. `http://localhost:8000` |
-| `VITE_GOOGLE_CLIENT_ID` | Same Google client ID as above |
-| `VITE_SITE_URL` | Optional canonical site URL; production defaults to `https://ontariodrivetestmap.fyi` |
-
-**2. Run it**
-
-```bash
-# backend (from the repo root)
-python3 -m venv venv && source venv/bin/activate
-pip install -r backend/requirements.txt
-cd backend && uvicorn main:app --reload --port 8000
-
-# frontend (second terminal)
-cd frontend
-npm install
-npm run dev            # http://localhost:5173
-```
-
-`npm run build` produces `frontend/dist/`; `npm start` serves it the same way production does.
-
-The data pipeline (`analysis/`, `geometry/`, `extraction/`) additionally needs `pip install numpy scipy scikit-learn`.
-
-**3. Dev-only helpers** (stripped from production builds)
-
-- `?devGuest=1`: this tab calls the API without your session cookie, to check signed-out views while signed in.
-- `?simulateDrive=1` (or `=2`…`10` for speed): fakes GPS driving the selected route in Practice drive, including a weak-GPS stretch and an off-route detour. A yellow "Simulated location" chip shows while it's active.
-
-**Testing on a phone** (practice drive needs HTTPS for location): run a second dev server that proxies the API, then open it through a Cloudflare quick tunnel.
-
-```bash
-cd frontend && VITE_API_URL=/api npx vite --port 5174 --strictPort
-cloudflared tunnel --url http://localhost:5174   # prints an https://…trycloudflare.com link
-```
-
-The `/api` proxy and the `*.trycloudflare.com` host allowance live in `vite.config.js` (dev server only). Google sign-in won't work on the tunnel address, but routes and practice drive don't need it.
-
----
-
-## Operational scripts
-
-| Command | When |
-| --- | --- |
-| `SITE_URL=https://ontariodrivetestmap.fyi python scripts/generate_seo_files.py` | After data changes (new centre, new routes). Regenerates `sitemap.xml`, `robots.txt` and `llms.txt` in `frontend/public/`. **Always set `SITE_URL`**; it defaults to localhost. |
-| `python scripts/promote_submissions.py --dry-run` / `--apply` | Promote corroborated community submissions into route lines. Review the dry run first. |
-| `python scripts/send_weekly_digest.py` | Weekly admin summary email; run from an external weekly cron. |
-| `python scripts/migrate_to_postgres.py` | Load pipeline output into Postgres (per-centre delete-then-reinsert). |
-
----
-
-## Deploying
-
-Railway deploys automatically from `main`: the Backend service builds `backend/` only (so everything it imports, including `osm.db`, must live inside `backend/`), and the Frontend service builds `frontend/` and runs `npm start`. Push to `main` and watch the two deploys in the Railway dashboard.
+**Domains:** `ontariodrivetestmap.fyi` and `www.` → Frontend service (`www` redirects to the apex in the page head); `api.ontariodrivetestmap.fyi` → Backend service. Keeping the API on a subdomain of the same site is what lets the `SameSite=Lax` session cookie work.
 
 ---
 
@@ -158,7 +82,7 @@ Railway deploys automatically from `main`: the Backend service builds `backend/`
 | `geometry/`, `corrections/` | Snapping traces to the OSM road network; hand corrections |
 | `analysis/` | Clustering, weighting and route reconstruction |
 | `common/` | Street-name normalisation and class voting shared by the pipeline |
-| `scripts/` | Operational scripts (see above) |
+| `scripts/` | Operational scripts (SEO file generation, submission promotion, weekly digest, data loading) |
 | `docs/` | Handoff notes, security audit, session logs |
 | `DESIGN.md`, `PRODUCT.md` | Design system (the confidence notation, layout rules, guest/practice-drive rules) and product principles |
 
