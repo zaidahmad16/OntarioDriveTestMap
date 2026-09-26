@@ -1,222 +1,199 @@
 ---
 name: OntarioDriveTestMap
-description: Crowdsourced, GPS-verified Ontario G/G2 road test routes
+description: Evidence-labelled Ontario G/G2 road-test routes
+updated: 2026-09-25
+source: OntarioDriveTestMap-UI-UX-Redesign-Spec.md (25 Sept 2026)
 colors:
-  ink: "#181c20"
-  ink-muted: "#57616b"
-  ink-faint: "#8a939c"
-  bg: "#f3f5f7"
-  surface: "#ffffff"
-  surface-sunken: "#eceff2"
-  border: "#d7dce1"
-  border-strong: "#b8c0c8"
-  accent: "#1f4e79"
-  accent-hover: "#163a5c"
-  accent-tint: "#e8eef4"
-  confirmed: "#c0392b"
-  confirmed-tint: "#fbeceb"
-  predicted: "#8e44ad"
-  predicted-tint: "#f5eefa"
-  success: "#1e8e5a"
-  success-tint: "#e7f6ef"
-  warning: "#c07c15"
-  warning-tint: "#fbf1e1"
-  gap: "#6b7680"
-  gap-tint: "#eef0f2"
+  ink: "#102A43"
+  ink-soft: "#536675"
+  canvas: "#F6F8F7"
+  surface: "#FFFFFF"
+  surface-muted: "#E8EEED"
+  border: "#D5E2DF"
+  border-strong: "#A9BDB8"
+  brand: "#0B756B"
+  brand-deep: "#096C64"
+  brand-wash: "#E4F3EF"
+  inferred: "#97531B"
+  inferred-wash: "#FFF1DB"
+  neutral-line: "#6A7A86"
+  danger: "#A33B32"
+  danger-wash: "#FBECEB"
+  focus: "#175CD3"
+  position: "#2467B6"  # user GPS puck only, never route status
 typography:
-  display:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "clamp(1.75rem, 3vw, 2.25rem)"
-    fontWeight: 700
-    lineHeight: 1.15
-    letterSpacing: "-0.01em"
-  headline:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "1.25rem"
-    fontWeight: 600
-    lineHeight: 1.3
-    letterSpacing: "-0.005em"
-  title:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "1rem"
-    fontWeight: 600
-    lineHeight: 1.4
-  body:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "0.9375rem"
-    fontWeight: 400
-    lineHeight: 1.55
-  label:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "0.8125rem"
-    fontWeight: 600
-    lineHeight: 1.3
-    letterSpacing: "0.01em"
-  data:
-    fontFamily: "ui-monospace, 'SF Mono', Consolas, monospace"
-    fontSize: "0.875rem"
-    fontWeight: 500
-    lineHeight: 1.4
+  family: "Manrope (Google Fonts, existing approved origin), system sans fallback. One family only."
+  hero: "800, 44/50 desktop, 32/38 mobile, -0.035em"
+  page-title: "700, 30/36"
+  section: "700, 22/28"
+  card-title: "700, 18/24"
+  body: "400, 16/24"
+  metadata: "14/20 minimum; never below 14px, wrap French instead of shrinking"
+  data: "same family, tabular figures, weight 600"
 rounded:
-  sm: "6px"
-  md: "10px"
-  lg: "14px"
-  pill: "999px"
-spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "12px"
-  lg: "20px"
-  xl: "32px"
-  xxl: "48px"
-components:
-  button-primary:
-    backgroundColor: "{colors.accent}"
-    textColor: "{colors.surface}"
-    rounded: "{rounded.sm}"
-    padding: "10px 18px"
-  button-primary-hover:
-    backgroundColor: "{colors.accent-hover}"
-  button-secondary:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.sm}"
-    padding: "9px 16px"
-  button-secondary-hover:
-    backgroundColor: "{colors.surface-sunken}"
-  badge-confirmed:
-    backgroundColor: "{colors.confirmed-tint}"
-    textColor: "{colors.confirmed}"
-    rounded: "{rounded.pill}"
-    padding: "3px 10px"
-  badge-predicted:
-    backgroundColor: "{colors.predicted-tint}"
-    textColor: "{colors.predicted}"
-    rounded: "{rounded.pill}"
-    padding: "3px 10px"
-  card:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.md}"
-    padding: "16px"
+  control: "10px"
+  card: "12px"
+  dialog: "16px"
+  pill: "999px (small badges and segmented choices only)"
+spacing: "4px grid: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 / 64"
+layout:
+  page-max: "1440px (route workspace)"
+  content-max: "1200px (home, discussion, static pages)"
+  rail: "384px route rail at >= 1100px"
+  gutters: "16px mobile, 24px tablet, 32-48px desktop"
+motion: "120-220ms, ease-out, everything collapses under prefers-reduced-motion"
 ---
 
 # Design System: OntarioDriveTestMap
 
-## 1. Overview
+Implemented in `frontend/src/App.css` (tokens on `:root`, component layer at the
+end of the file) and mirrored for the static pages in
+`frontend/public/static-site.css`. Keep the two token blocks in sync.
 
-**Creative North Star: "The Field Notebook."**
+## 1. Direction
 
-Picture a careful examiner's own notebook: real streets, real turns, real timestamps, written down exactly as driven, with no invented flourish and no doubt left unmarked. That is the whole personality of this interface. It is a civic utility used at a moment of real stress, a driver's-test candidate checking a route the night before, or a passenger reading turns aloud from the passenger seat, not a product being sold. Every design choice optimizes for "can I trust this, right now, at a glance" over "does this look impressive."
+**Road atlas + trustworthy field notes.** A calm, credible study tool for
+people preparing for an Ontario G or G2 road test. It should read as a
+well-made independent civic map product. It should not read as a generic SaaS
+dashboard, a government service, or a driving game.
 
-This system explicitly rejects the visual language of its own competitors, confirmed by direct audit: template-clone booking sites that dress up a fake sample route in confident marketing chrome, and schematic maps that look precise while being drawn from memory. Nothing here should ever look more certain than the data actually is. Where a competitor would smooth a rough edge into a glossy stat card, this system shows the real, sometimes-uneven texture of the source data instead, because that texture is the actual evidence of trustworthiness.
+The visual signature is the **route itself**: real geometry on a quiet map,
+and one confidence notation repeated everywhere. There's no hero
+illustration, gradient, glassmorphism, emoji road sign, crest, seal or
+"verified" ribbon. Nothing may look like a DriveTest or provincial mark.
 
-It also rejects generic SaaS product polish: no gradient hero banners, no big glossy KPI tiles, no marketing urgency. The existing app already encodes a real, load-bearing color language for data trust (confirmed vs. predicted vs. gap), established under real incident pressure; this system does not reinvent those meanings, it gives them a coherent home alongside a calm, civic-toned UI chrome built around them.
+Screenshot test: if you can swap the logo for a travel or fitness app and the
+screen still makes sense, it's too generic. If someone can't tell confirmed
+from inferred without opening a panel, the map treatment is wrong.
 
-**Key Characteristics:**
-- Calm, high-legibility neutral canvas; color is reserved for meaning, not decoration
-- One civic-blue accent for generic actions and navigation, kept visually distinct from the data-trust palette so the two systems never get confused
-- A dedicated, unambiguous five-color trust-tier vocabulary (confirmed / predicted / success / warning / gap) used identically everywhere a route or fact is shown
-- Typography built for scanning under pressure: strong hierarchy, generous line height, a monospace treatment for real measured data (distances, durations, coordinates) that visually signals "this number was measured, not estimated"
-- Flat by default; elevation is used sparingly and only to lift transient UI (popovers, the notification bell, modals) above the map
+## 2. Colour
 
-## 2. Colors
+UI chrome is ink on pale stone/green surfaces. Teal (`brand`) is both the
+active-control colour and the "confirmed" route colour on purpose: the
+product's identity *is* confirmed evidence. Amber and grey carry route
+meaning only and are never decoration. `danger` is for errors and
+destructive confirmation only and is **never a route colour**.
 
-The palette splits into two systems that must never blend: **UI chrome** (neutral canvas + one civic accent, used for navigation, actions, and structure) and **data trust** (the five-color vocabulary that reports how certain a piece of route data actually is). A button or link is never colored using a trust-tier color, and a trust-tier fact is never colored using the accent; keeping the two vocabularies visually distinct is what makes the trust colors legible as *meaning* rather than *style*.
+Primary buttons are solid `ink`. Selected segmented controls use `brand`.
+Focus is always a 3px `focus` blue outline, offset 3px.
 
-### Primary
-- **Civic Blue** (`#1f4e79`): the one UI accent. Primary buttons, active nav/tab states, links, focus rings. Deliberately not a generic SaaS blue or the same hue as any trust color, evoking an official, dependable civic tool rather than a startup product. Used sparingly: most of a screen should be neutral.
+Use dark text on the pale washes, never white on a wash.
 
-### Neutral
-- **Ink** (`#181c20`): primary text and icons. A soft near-black with a faint cool cast, easier to sustain than pure black across long instruction tables.
-- **Ink Muted** (`#57616b`): secondary text, captions, metadata (timestamps, author counts). Passes 4.5:1 on both `Cloud` and `Surface White`.
-- **Ink Faint** (`#8a939c`): tertiary/disabled text and placeholder copy only; never body text.
-- **Cloud** (`#f3f5f7`): page background. A true cool near-white, not a warm cream, matching the tool's civic register rather than an editorial-warm one.
-- **Surface White** (`#ffffff`): panels, cards, the map container, popovers, sitting one layer above Cloud.
-- **Surface Sunken** (`#eceff2`): inset wells inside a panel (code-like blocks, quoted excerpts, disabled inputs).
-- **Border** (`#d7dce1`) / **Border Strong** (`#b8c0c8`): hairline dividers and default input borders / emphasized borders (selected states, active tab underline).
+## 3. The confidence notation (The Never-Blur Rule)
 
-### Data Trust Palette (Named Rule)
-**The Never-Blur Rule.** Confirmed and predicted data are never rendered in a way that makes them visually indistinguishable, even under pressure to simplify. Every route line, badge, table row, and popup that carries a trust tier uses one of these five colors, consistently, everywhere:
+Confirmed and inferred data are never visually indistinguishable, even under
+pressure to simplify. Colour is never the only carrier: every status is a
+**line pattern + a word**, repeated identically in the map, map legend,
+route summary, turn rows, centre index, home trust note and About.
 
-- **Confirmed** (`#c0392b` / tint `#fbeceb`): real, GPS-verified route geometry and "hand-verified" badges. The single highest-trust signal in the product.
-- **Predicted** (`#8e44ad` / tint `#f5eefa`): road-snapped guesses bridging two real points nobody drove between. Always paired with the word "predicted", never color alone.
-- **Success** (`#1e8e5a` / tint `#e7f6ef`): affirmative states unrelated to route geometry itself, form submitted, report sent, an "Easy" difficulty rating, a promoted community submission.
-- **Warning** (`#c07c15` / tint `#fbf1e1`): moderate caution, a "Moderate" difficulty rating, an off-route deviation during drive-along practice.
-- **Gap** (`#6b7680` / tint `#eef0f2`): honestly-flagged missing data, an unrouted straight-line jump, a below-threshold segment. Deliberately the least saturated of the five: an absence of evidence, not a claim.
+| Status | Line | Word (EN / FR) | Backend mapping |
+| --- | --- | --- | --- |
+| Confirmed | solid teal, round caps | Confirmed / Confirmé | `route_lines.predicted = false AND below_threshold = false` |
+| Inferred | amber dash `10 9` | Inferred / Déduit | `predicted = true` (road-snapped bridge) **or** `below_threshold = true` (weaker than the publish threshold) |
+| Unrouted gap | grey dotted `2 8` | Unrouted gap / Écart non tracé | client-split beeline > 400 m (`splitAtGaps`) |
+| Unknown | thin neutral line | Status unavailable / Statut indisponible | anything else. Never styled as confirmed |
 
-## 3. Typography
+The mapping lives in one place: `lineStatus()` in
+`frontend/src/components/MapView.jsx`. The shared UI pieces are
+`LineSample`, `StatusBadge` and `RouteLegend` in `frontend/src/RouteNotation.jsx`,
+which take a semantic `status` enum, never a colour. A route with both
+confirmed and inferred sections is labelled "Partly inferred" and its
+section counts are listed separately; a single confirmed leg never
+upgrades the whole route.
 
-**UI Font:** Inter (with `system-ui, sans-serif` fallback)
-**Data Font:** ui-monospace (with `'SF Mono', Consolas, monospace` fallback)
+Counts are never merged: centre rows show confirmed and inferred
+separately, and evidence is labelled with its real scope ("Evidence for
+this centre" means the `/traces` records for the whole centre, never proof
+for a particular route or turn).
 
-**Character:** One clean, function-first grotesque doing every job from page titles to form labels, so the interface never competes with the content for attention, paired with a monospace treatment reserved for real measured facts. The mono face is not decorative: seeing a distance or duration in mono is a quiet, learnable signal that the number came from the road, not from a guess.
+## 4. Map
 
-### Hierarchy
-- **Display** (700, `clamp(1.75rem, 3vw, 2.25rem)`, 1.15): page-level headers only (the app title). Used once per page.
-- **Headline** (600, 1.25rem, 1.3): section headers (a centre's name once selected, "Discussion", "Compare centres").
-- **Title** (600, 1rem, 1.4): component-level headers (a route panel's summary line, a card title, a form legend).
-- **Body** (400, 0.9375rem, 1.55): all prose, instructions, form copy. Capped at 70ch wherever it wraps freely.
-- **Label** (600, 0.8125rem, 1.3, +0.01em tracking): button text, table headers, form field labels, badges. Small and confident, not stretched into an all-caps eyebrow.
-- **Data** (500, 0.875rem, 1.4, monospace): distances, durations, speeds, coordinates, dates in tables. Right-aligned in tabular contexts.
+- Base OSM tiles are lightly muted (`.ontario-tiles` filter); overlays and
+  attribution are untouched.
+- Route sections draw over a pale casing so they stay legible on busy streets.
+- Evidence points (scored junctions) are **off by default**, live in their own
+  Leaflet pane below the route, and are small neutral circles when shown
+  ("Colour by support" is an opt-in sub-option).
+- One named centre pin, visually distinct from evidence points.
+- Auto-fit only on centre/route change. Never refit on a turn click, layer
+  toggle or rerender. "Fit route" resets the view.
+- Turn ↔ map linking only exists when a route has more than one section;
+  otherwise there's no honest correspondence to draw.
+- If tiles fail, a retry banner appears. Text, status and turns always remain.
 
-### Named Rules
-**The Measured-Fact Rule.** Any number that came from a real measurement (OSRM distance, GPS duration, a posted speed limit) renders in the Data (monospace) style. Any number that's a count or a UI label (a route index, a badge count) stays in the UI font. This is how a reader tells "real" from "counted" at a glance, without reading the label.
+## 5. Layout
 
-## 4. Elevation
+- **Header:** one 68px row. Brand · Find a centre / Discussion / About ·
+  Submit a route (primary) · EN/FR · notifications · Account menu. Below
+  1100px the nav collapses into a labelled Menu; below 600px notifications
+  and account move into the Menu too. Account holds the role badge, email
+  preference, sign out and delete account (two-step).
+- **Home:** search-first hero, centre index rows with aligned counts, an
+  editorial trust note using the line samples, compare as a quiet disclosure.
+- **Route (≥1100px):** breadcrumb + title + Change centre on one band, then a
+  384px rail (picker, summary, turns) beside a sticky map
+  `min(70vh, 760px)`. Tablet: picker and summary side by side, map, turns.
+  Phone: picker → map (route title and status in its toolbar) → summary →
+  turns, with section jump links.
+- **Discussion:** 960px column, one filter toolbar (a Filters disclosure on
+  phones), editorial feed with rules instead of cards, separate empty,
+  filtered-empty and error states.
+- **About / legal:** readable article column (~68–76ch), numbered source rows,
+  illustrative legend figure explicitly captioned as not a real route.
+- **Submission wizard:** 720px dialog on desktop, full screen on phones,
+  named four-step stepper, one-line motivation with the long note behind
+  "Why submissions help", discard confirmation, modal focus handling.
 
-Flat by default. This system uses two, not sixteen, levels: the page canvas (Cloud) and one lifted surface (Surface White) for everything that reads as a distinct object, panels, cards, tables, the map. A third, genuinely floating level exists only for transient overlays that must sit above the map and everything else: popovers (the notification bell, the reminder button, dropdown menus) and modals (the route submission wizard). Nothing else gets a shadow; depth on static content is conveyed by the Surface/Cloud contrast and hairline borders, not by drop shadows.
+## 6. Components and states
 
-### Shadow Vocabulary
-- **Overlay** (`box-shadow: 0 8px 24px rgba(20, 24, 28, 0.14)`): popovers and dropdown panels. Paired with a 1px `Border` outline so it reads crisply even on a low-contrast display.
-- **Modal** (`box-shadow: 0 16px 48px rgba(20, 24, 28, 0.22)`): full modals over a dimmed backdrop (`rgba(20, 24, 28, 0.45)`).
+Cards are 12px radius with a hairline border and no shadow at rest (the
+Flat-Ground Rule: only content that leaves the flow, such as popovers,
+drawers, dialogs and the submission nudge, gets a shadow). Don't wrap every
+sentence in a card; the centre index, turn feed, discussion feed and About
+all use rules and spacing instead.
 
-### Named Rules
-**The Flat-Ground Rule.** If content is part of the page's normal reading flow, it has no shadow, only a border or background shift. A shadow appears exclusively on content that has left the document flow to float above it.
+Every async surface has a loading, empty and error state: skeletons (not a
+blank area), a `state-panel` for empty, and `state-panel--error` with a Retry
+that keeps the user's selections. Failures never render as "no posts" or "no
+centres".
 
-## 5. Components
+## 7. Copy and i18n
 
-### Buttons
-- **Shape:** 6px corner radius (`{rounded.sm}`), never fully square, never pill-shaped except badges.
-- **Primary:** Civic Blue background, white text, `10px 18px` padding, Label typography. Used once per view for the single most important action (submit a route, start drive-along practice).
-- **Secondary:** Surface White background, Ink text, 1px Border. Default for everything else, most buttons in this app are secondary.
-- **Hover / Focus:** Primary darkens to Accent Hover; secondary fills with Surface Sunken. Focus-visible always shows a 2px Civic Blue outline, offset 2px, regardless of button variant, never suppressed.
-- **Destructive (delete, remove):** Secondary shape, Confirmed-red text and border on hover only, to avoid a fully red button reading as a route-trust signal.
+Use real product language: "Ottawa Walkley · G Route 1", "Evidence for this
+centre", "Inferred section". No marketing slogans. Every message is a
+complete string per key in `frontend/src/i18n.jsx`; plurals use
+`tn(key, n)` with `_one` / `_other` variants (Intl.PluralRules). French uses
+"itinéraire" for route throughout. Language persists across entry points via
+the `lang` localStorage key. The static About/legal pages are English-only.
 
-### Badges (Trust Pills)
-- **Style:** pill radius (`{rounded.pill}`), tinted background matched to its trust color, same-hue text, `3px 10px` padding, Label typography, always paired with a short word ("verified", "predicted"), never color alone.
+## 8. Guest boundary and practice drive (2026-09-25)
 
-### Cards / Panels
-- **Corner Style:** 10px radius (`{rounded.md}`).
-- **Background:** Surface White on Cloud.
-- **Shadow Strategy:** none at rest (see Elevation's Flat-Ground Rule); a 1px Border instead.
-- **Internal Padding:** 16px (`{spacing.lg}` at 20px for larger panels like the route summary card).
+- **Reading is public, contributing needs an account.** Guests see the
+  landing (real route preview + centres), route maps, turns and evidence
+  counts. Raw source records, centre tips, discussion, submissions,
+  reports and reminders ask for sign-in *at the action*, through
+  `useSignIn().requireSignIn(reason, action)` (`frontend/src/SignIn.jsx`).
+  Each reason has its own honest title and body, and the action resumes after
+  sign-in. Never justify a read gate with "accountability".
+- **Practice drive** (`components/PracticeDrive.jsx`, mobile only) is a
+  Phase A visual follower: one reducer state machine (preview → acquiring
+  → joining → following ↔ lowAccuracy ↔ offRoute, plus away / paused /
+  interrupted / denied / noFix / unavailable). **Position blue `#2467B6`** is
+  only ever the user's puck. GPS quality uses a bar-chip with its own words,
+  so it can't be read as route confidence. No turn countdown or voice until
+  turn steps carry geometry anchors. Hidden page = interrupted; resuming
+  needs a fresh fix. Location never leaves the device.
 
-### Inputs / Fields
-- **Style:** Surface White background, 1px Border, 6px radius, 8-10px vertical padding.
-- **Focus:** Border shifts to Civic Blue, 2px, no glow/box-shadow bloom (keeps the flat, precise feel).
-- **Error:** Border and helper text shift to Confirmed-red tint colors (borrowed for form validation only, never implying route data).
-- **Disabled:** Surface Sunken background, Ink Faint text.
+## 9. Don'ts
 
-### Navigation
-- **Style:** the app header is a single flat row on Surface White, 1px Border beneath it, Ink text at Body weight, active/current state underlined in Civic Blue rather than filled, keeping the header visually quiet under Cloud-toned pages.
-- **Mobile:** the header row wraps rather than truncates; the language toggle and notification bell always stay visible, secondary actions (submit route, discussion link, reminder) collapse into a compact overflow row below the title on narrow viewports.
-
-### Route Trust Banner (signature component)
-A full-width, tinted notice strip (trust-tint background, trust-color 1px border, trust-color text for the key phrase only) that appears directly under a route's summary whenever that route contains gaps or predicted segments. This is the single most important custom component in the app: it is the concrete implementation of the Never-Blur Rule, and it must never be dismissible, collapsible, or reduced to an icon.
-
-## 6. Do's and Don'ts
-
-### Do:
-- **Do** keep the data-trust palette (confirmed / predicted / success / warning / gap) completely separate from the Civic Blue UI accent; a button is never trust-colored and a trust badge is never accent-colored.
-- **Do** pair every trust color with a plain-language word ("confirmed", "predicted", "unrouted"). Color alone is not an accessible signal and is not sufficient for this app's own stated safety principle.
-- **Do** use the monospace Data style for every real measured number (distance, duration, speed, date), consistently, so it becomes a learnable trust signal in itself.
-- **Do** default to flat surfaces with a hairline border; reserve shadows for content that has actually left the page's document flow (popovers, modals).
-- **Do** design every screen for a narrow phone viewport first; this product is used one-handed, often by an anxious test-taker or a passenger reading aloud.
-
-### Don't:
-- **Don't** soften or hide the predicted/gap/confirmed distinction for visual cleanliness, under any circumstance, including a request to simplify. This is a previously-litigated, non-negotiable product rule, not a style preference.
-- **Don't** use gradient hero banners, glossy KPI stat cards, or any SaaS-marketing-page chrome. This is a utility tool, not a product landing page.
-- **Don't** use border-left/border-right color stripes as an accent on cards or list rows; use full borders, tinted backgrounds, or leading badges instead.
-- **Don't** apply gradient text, glassmorphism, or decorative blur anywhere in this system.
-- **Don't** stretch Label typography into a tiny all-caps tracked "eyebrow" above every section; this system uses at most one deliberate section label per screen, never as default scaffolding.
-- **Don't** introduce a second UI accent hue. One Civic Blue for all generic actions; new semantic meanings get a new named trust color instead of borrowing the accent.
+- Don't soften the confirmed/inferred/gap distinction for visual cleanliness,
+  under any circumstance, including a request to simplify.
+- Don't invent data to fill a design: no fake posts, counts, confidence
+  percentages, route previews or maneuver icons that aren't in the
+  instruction text.
+- Don't imply a route will be assigned on test day, or that web GPS tracks in
+  the background.
+- Don't use a serif display face (removed at the owner's request, 2026-09-25),
+  gradient text, glass, or decorative blur beyond the header's backdrop.
+- Don't give secondary features (compare, reminders, digest, discussion) the
+  same visual weight as route selection and the map.

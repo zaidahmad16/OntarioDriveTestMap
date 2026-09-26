@@ -2,82 +2,64 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* One canonical host: www (Railway serves it too) redirects to the
+         apex before anything loads, so sign-in, cookies and canonical
+         URLs only ever see ontariodrivetestmap.fyi. */
+      if (location.hostname === "www.ontariodrivetestmap.fyi") {
+        location.replace("https://ontariodrivetestmap.fyi" + location.pathname + location.search + location.hash);
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>Page not found — OntarioDriveTestMap</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,500;1,400&family=Manrope:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
-      :root {
-        --bg: #fbfbfa;
-        --ink: #2f3437;
-        --ink-muted: #787774;
-        --accent: #171717;
-        --accent-hover: #333333;
-        --border-strong: #d8d7d3;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--ink);
-        font-family: "Manrope", system-ui, sans-serif;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        padding: 24px;
-      }
-      .card {
-        max-width: 440px;
-        text-align: center;
-      }
-      h1 {
-        font-family: "Newsreader", Georgia, serif;
-        font-weight: 500;
-        font-size: 2rem;
-        margin: 0 0 12px;
-      }
-      p {
-        color: var(--ink-muted);
-        margin: 0 0 24px;
-        line-height: 1.5;
-      }
-      .actions {
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-      a {
-        font-family: "Manrope", system-ui, sans-serif;
-        font-weight: 600;
-        font-size: 0.875rem;
-        text-decoration: none;
-        padding: 9px 16px;
-        border-radius: 6px;
-        border: 1px solid var(--border-strong);
-        color: var(--ink);
-      }
-      a.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
-      }
-      a.primary:hover { background: var(--accent-hover); }
+      .nf { max-width: 1200px; margin: 0 auto; padding: 96px 48px 48px; }
+      .nf h1 { font-size: 2.25rem; line-height: 2.75rem; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 12px; }
+      .nf p { color: var(--ink-soft); margin: 0 0 24px; }
+      .nf .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .nf .actions a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink); font-weight: 600; text-decoration: none; }
+      .nf .actions a.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+      @media (max-width: 767px) { .nf { padding: 48px 16px; } }
     </style>
+    <link rel="stylesheet" href="/static-site.css" />
   </head>
   <body>
-    <div class="card">
+    <a href="#main" class="skip-link">Skip to content</a>
+    <header class="s-header">
+      <div class="s-header__inner">
+        <a class="s-brand" href="/" aria-label="OntarioDriveTestMap — home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M5 22 C5 13, 12 13, 14 13" fill="none" stroke="#0b756b" stroke-width="3.2" stroke-linecap="round"/><path d="M14 13 C18 13, 23 12, 23 5" fill="none" stroke="#97531b" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="3.2 3.6"/><circle cx="5" cy="22" r="2.6" fill="#102a43"/></svg><span class="s-brand__word">OntarioDriveTest<span>Map</span></span></a>
+        <nav class="s-nav" aria-label="Main"><a href="/">Find a centre</a><a href="/discussion.html">Discussion</a><a href="/about.html">About</a></nav>
+        <a class="s-submit" href="/?submit=1">Submit a route</a>
+        <details class="s-menu"><summary>Menu</summary><nav aria-label="Main"><a href="/">Find a centre</a><a href="/discussion.html">Discussion</a><a href="/about.html">About</a></nav></details>
+      </div>
+    </header>
+    <main id="main" class="nf">
       <h1>Page not found</h1>
       <p>We couldn't find the page you're looking for.</p>
       <div class="actions">
         <a class="primary" href="/">Find a test centre</a>
         <a href="/discussion.html">View discussions</a>
       </div>
-    </div>
+    </main>
+    <footer class="s-footer">
+      <div class="s-footer__inner">
+        <div>
+          <strong>OntarioDriveTestMap</strong>
+          <p>Not affiliated with, endorsed by, or officially connected to DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</p>
+        </div>
+        <nav aria-label="Legal">
+          <a href="/about.html">About</a>
+          <a href="/privacy-policy.html">Privacy</a>
+          <a href="/terms-of-service.html">Terms</a>
+          <a href="/cookie-policy.html">Cookies</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

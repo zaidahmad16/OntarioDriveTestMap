@@ -10,14 +10,14 @@ Not affiliated with, endorsed by, or operated on behalf of DriveTest, Serco Cana
 
 ## What it does
 
-- **Route maps** for each DriveTest centre, split by G and G2, with turn-by-turn instructions, real street names, speed limits, and junction types where the underlying data supports them.
-- **Confidence labeling on every route** — confirmed, predicted, or insufficient evidence — computed from how many independent sources (GPS traces, video transcriptions, community reports) actually agree on a given road segment. This distinction is never blurred for visual cleanliness; a driving-test candidate could physically execute a turn no one ever confirmed.
-- **Community route submission**, validated live against real street-graph data, with an auto-clustering pipeline that promotes corroborated submissions into official routes with zero manual review.
-- **Live GPS drive-along practice mode**, with map-matching and off-route detection, entirely client-side.
-- **Active-recall quiz mode**, built from the same verified route data.
-- **A forum** ("where I messed up") anchored to real map junctions, and a separate general **Discussion** board — both with fully automated moderation, no AI moderation API, no volunteer mods.
-- **Centre comparison, difficulty scoring, GPX/PDF export.**
-- **Accounts** via Google Sign-In only — no passwords ever collected or stored.
+- **Public route maps** for each DriveTest centre, split by G and G2, with turn-by-turn instructions, real street names, speed limits and junction types where the data supports them. Reading routes needs no account.
+- **Confidence labelling on every section**: confirmed (solid teal), inferred (dashed amber) or unrouted gap (dotted grey), computed from how many independent sources agree on each stretch of road. This distinction is never blurred for visual cleanliness; a candidate could physically execute a turn no one ever confirmed.
+- **Numbered turn points** on the map for turns matched, by their own street names, to a real junction on the route (`backend/turn_anchors.py`). Unmatched turns stay text-only, never guessed.
+- **Route playback** (a dot driving the route at 0.5–4×) and a **mobile practice drive** that follows your live position in the browser. Foreground only, and location never leaves the device.
+- **Community route submission**, validated live against real street-graph data, with a clustering pipeline (`scripts/promote_submissions.py`) that promotes routes corroborated by at least two different accounts.
+- **Centre tips and corrections** anchored to real junctions, and a separate site-wide **Discussion** board, both with fully automated moderation.
+- **Centre comparison, GPX export and printable turn lists.**
+- **Accounts** via Google Sign-In only, required for contributing (submissions, reports, posts, reminders), never for reading. No passwords are ever collected or stored.
 - English/French throughout.
 
 ## Design principles

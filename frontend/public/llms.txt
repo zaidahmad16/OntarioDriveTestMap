@@ -10,28 +10,32 @@ corroborating sources and labeled with a trust tier.
 
 ## Trust tiers -- read before summarizing route data
 
-- **Confirmed**: multiple independent sources corroborate this route.
-- **Predicted**: inferred to connect real observed segments, not itself
-  directly observed end-to-end.
-- **Below-threshold / gap**: insufficient evidence; shown honestly as a
-  gap, never drawn as a solid confirmed road.
+- **Confirmed** (solid teal line): hand-transcribed from a recorded test-drive
+  video, or corroborated by enough independent sources to pass the
+  confirmation threshold.
+- **Inferred** (dashed amber line): a road-snapped connection between
+  confirmed points that no source actually drove, or real evidence that is
+  weaker than the threshold.
+- **Unrouted gap** (dotted grey line): the data jumps in a straight line
+  where the map data doesn't connect. Not a road.
 
-Do not describe a predicted or gap route as "confirmed" or "verified."
+Do not describe an inferred section or gap as "confirmed" or "verified,"
+and never present any route as the one a candidate will be assigned.
 This distinction is safety-relevant: a real test-taker could act on it.
 
 ## Community discussion vs. route evidence
 
 The Discussion feature (vote counts, comments, popularity) is a SEPARATE
 system from route trust tiers. Upvotes on a discussion post never change
-a route's confirmed/predicted/gap status. Do not conflate community
+a route's confirmed/inferred/gap status. Do not conflate community
 popularity with verified route evidence.
 
 ## Key public sections
 
-- Homepage / centre directory: http://localhost:5173/
-- A specific centre's routes: http://localhost:5173/?centre=<centre-id>
-- Discussion feed: http://localhost:5173/discussion.html
-- A specific discussion post: http://localhost:5173/discussion.html?post=<id>
+- Homepage / centre directory: https://ontariodrivetestmap.fyi/
+- A specific centre's routes: https://ontariodrivetestmap.fyi/?centre=<centre-id>
+- Discussion feed: https://ontariodrivetestmap.fyi/discussion.html
+- A specific discussion post: https://ontariodrivetestmap.fyi/discussion.html?post=<id>
 
 ## Not affiliated with the Government of Ontario or Serco/DriveTest
 

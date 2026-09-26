@@ -1,0 +1,306 @@
+/* Shared shell for the static pages (About, Privacy, Terms, Cookies,
+ * 404). Mirrors the app's tokens and SiteHeader/SiteFooter from
+ * src/App.css + src/SiteShell.jsx without needing the React bundle.
+ * Keep the token values in sync with App.css :root. */
+:root {
+  color-scheme: light;
+  --ink: #102a43;
+  --ink-soft: #536675;
+  --canvas: #f6f8f7;
+  --surface: #ffffff;
+  --surface-muted: #e8eeed;
+  --border: #d5e2df;
+  --border-strong: #a9bdb8;
+  --brand: #0b756b;
+  --brand-deep: #096c64;
+  --brand-wash: #e4f3ef;
+  --inferred: #97531b;
+  --inferred-wash: #fff1db;
+  --neutral-line: #6a7a86;
+  --focus: #175cd3;
+  /* legacy names used by the pages' own inline styles */
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-tertiary: var(--ink-soft);
+  --accent: var(--brand-deep);
+  --accent-hover: var(--ink);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: "Manrope", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+a {
+  color: var(--brand-deep);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+/* Header ------------------------------------------------------------ */
+.s-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--canvas) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.s-header__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 68px;
+  padding: 0 48px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.s-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.s-brand span {
+  color: var(--brand-deep);
+}
+
+.s-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.s-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  border-radius: 10px;
+}
+
+.s-nav a:hover {
+  color: var(--ink);
+  background: var(--surface-muted);
+}
+
+.s-nav a[aria-current="page"] {
+  color: var(--ink);
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 var(--brand);
+}
+
+.s-submit {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.s-submit:hover {
+  background: #0a1e31;
+  color: #fff;
+}
+
+.s-menu {
+  display: none;
+  position: relative;
+}
+
+.s-menu summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.s-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.s-menu nav {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(16, 42, 67, 0.1);
+  padding: 8px;
+  display: grid;
+}
+
+.s-menu nav a {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.s-menu nav a:hover,
+.s-menu nav a[aria-current="page"] {
+  background: var(--surface-muted);
+}
+
+@media (max-width: 899px) {
+  .s-header__inner {
+    padding: 0 24px;
+    gap: 12px;
+  }
+  .s-nav {
+    display: none;
+  }
+  .s-menu {
+    display: block;
+  }
+}
+
+@media (max-width: 479px) {
+  .s-header__inner {
+    padding: 0 16px;
+  }
+  .s-brand__word {
+    display: none;
+  }
+}
+
+/* Article column (legal pages keep their own .wrap) ------------------ */
+.wrap {
+  padding-top: 40px !important;
+}
+
+.wrap h1,
+.article h1 {
+  font-family: inherit !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--ink);
+}
+
+.wrap p,
+.wrap li {
+  font-size: 1rem;
+}
+
+a.back {
+  display: none;
+}
+
+/* Footer ------------------------------------------------------------- */
+.s-footer {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  margin-top: 64px;
+}
+
+.s-footer__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 48px 48px;
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.s-footer p {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.s-footer strong {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.s-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.s-footer nav a {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 767px) {
+  .s-footer__inner {
+    padding: 24px 16px 32px;
+  }
+}
+
+/* Remove the old per-page footer link rows (replaced by .s-footer). */
+.footer-links {
+  display: none;
+}
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--ink);
+  color: #fff;
+  padding: 8px 12px;
+  z-index: 1000;
+  border-radius: 6px;
+}
+
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+}

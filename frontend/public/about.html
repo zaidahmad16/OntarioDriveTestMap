@@ -2,120 +2,278 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* One canonical host: www (Railway serves it too) redirects to the
+         apex before anything loads, so sign-in, cookies and canonical
+         URLs only ever see ontariodrivetestmap.fyi. */
+      if (location.hostname === "www.ontariodrivetestmap.fyi") {
+        location.replace("https://ontariodrivetestmap.fyi" + location.pathname + location.search + location.hash);
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>About — OntarioDriveTestMap</title>
-    <meta name="description" content="What OntarioDriveTestMap is, how the route data is built, and why confidence labeling matters." />
+    <meta name="description" content="How OntarioDriveTestMap reconstructs Ontario G and G2 road-test routes from evidence, how confirmed and inferred sections are labelled, and what the map can't promise." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static-site.css" />
     <style>
-      :root {
-        --canvas: #f6f4ef; --text-primary: #171717;
-        --text-secondary: #65635e; --text-tertiary: #6b6864;
-        --border: #dddad3; --accent: #1b1b1a; --accent-hover: #292927;
-        --confirmed: #9f2f2d; --confirmed-tint: #fdebec;
-        --predicted: #6b4c8a; --predicted-tint: #f1ecf7;
-        --gap: #6b6b68; --gap-tint: #f0efed;
+      /* About is a readable article, not a card grid (spec §7):
+         a narrow measure, numbered source rows separated by rules,
+         and the same solid/dashed notation the map uses. */
+      .article { max-width: 1200px; margin: 0 auto; padding: 56px 48px 24px; }
+      .article__col { max-width: 760px; }
+      .overline { margin: 0 0 8px; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand-deep); }
+      .article h1 { font-size: 2.75rem; line-height: 3.125rem; margin: 0 0 16px; }
+      .lede { font-size: 1.125rem; line-height: 1.75rem; color: var(--ink-soft); margin: 0 0 12px; max-width: 60ch; }
+      .article h2 { font-size: 1.5rem; line-height: 2rem; font-weight: 800; letter-spacing: -0.02em; margin: 64px 0 16px; scroll-margin-top: 88px; }
+      .article p, .article li { color: var(--ink-soft); max-width: 68ch; }
+      .article strong { color: var(--ink); }
+      .contents { margin: 32px 0 0; padding: 16px 0 0; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: 0.9375rem; }
+      .contents a { font-weight: 600; }
+
+      .sources { list-style: none; margin: 0; padding: 0; counter-reset: src; border-top: 1px solid var(--border); }
+      .sources li, .notation li { max-width: none; }
+      .sources li { counter-increment: src; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 16px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+      .sources li::before { content: counter(src, decimal-leading-zero); grid-row: 1 / span 2; font-weight: 800; font-size: 1.25rem; color: var(--brand-deep); font-variant-numeric: tabular-nums; }
+      .sources h3 { margin: 0; font-size: 1.125rem; color: var(--ink); }
+      .sources p { margin: 0; }
+
+      .notation { display: grid; gap: 20px; margin: 24px 0; padding: 0; list-style: none; }
+      .notation li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; align-items: start; }
+      .notation svg { margin-top: 8px; }
+      .notation b { display: block; color: var(--ink); }
+
+      .figure { margin: 32px 0 0; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+      .figure svg { width: 100%; height: auto; display: block; }
+      .figure figcaption { font-size: 0.875rem; color: var(--ink-soft); margin-top: 12px; }
+
+      .limits { padding-left: 20px; }
+      .subhead { font-size: 1.0625rem; margin: 32px 0 8px; color: var(--ink); }
+      .features { display: grid; gap: 8px 32px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); max-width: none; }
+      .features h3 { font-size: 1rem; margin: 16px 0 4px; color: var(--ink); }
+      .features ul { padding-left: 20px; margin: 0; }
+      .features li { margin: 6px 0; }
+      .acct { display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; padding: 1px 7px; border-radius: 999px; background: var(--surface-muted); color: var(--ink-soft); vertical-align: 1px; }
+      .limits li { margin: 8px 0; }
+
+      .cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+      .cta a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink); }
+      .cta a.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+      .cta a:hover { background: var(--surface-muted); color: var(--ink); }
+      .cta a.primary:hover { background: #0a1e31; color: #fff; }
+
+      .disclaimer { margin-top: 48px; padding: 16px 0 0 16px; border-left: 3px solid var(--border-strong); font-size: 0.9375rem; }
+
+      @media (max-width: 767px) {
+        .article { padding: 32px 16px 16px; }
+        .article h1 { font-size: 2rem; line-height: 2.375rem; }
+        .lede { font-size: 1rem; line-height: 1.5rem; }
+        .article h2 { margin-top: 48px; }
+        .notation li { grid-template-columns: 56px minmax(0, 1fr); }
       }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0; background: var(--canvas); color: var(--text-primary);
-        font-family: "Manrope", system-ui, sans-serif; line-height: 1.6;
-      }
-      .wrap { max-width: 760px; margin: 0 auto; padding: 64px 24px 96px; }
-      a.back { color: var(--text-secondary); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
-      a.back:hover { color: var(--text-primary); }
-      h1 {
-        font-family: "Newsreader", Georgia, serif; font-weight: 500;
-        font-size: 2.5rem; margin: 24px 0 4px; letter-spacing: -0.01em;
-      }
-      .tagline { color: var(--text-secondary); font-size: 1.0625rem; margin: 0 0 40px; max-width: 52ch; }
-      h2 {
-        font-family: "Manrope", sans-serif; font-weight: 700; font-size: 1.0625rem;
-        margin: 40px 0 12px;
-      }
-      p, li { color: var(--text-secondary); font-size: 0.9375rem; }
-      strong { color: var(--text-primary); }
-      ul { padding-left: 20px; margin: 8px 0 16px; }
-      li { margin: 4px 0; }
-      a { color: var(--accent); }
-      a:hover { color: var(--accent-hover); }
-      .badges { display: flex; gap: 8px; margin: 16px 0 24px; flex-wrap: wrap; }
-      .badge {
-        display: inline-flex; align-items: center; padding: 4px 10px;
-        border-radius: 999px; font-size: 0.75rem; font-weight: 600;
-      }
-      .badge--confirmed { background: var(--confirmed-tint); color: var(--confirmed); }
-      .badge--predicted { background: var(--predicted-tint); color: var(--predicted); }
-      .badge--gap { background: var(--gap-tint); color: var(--gap); }
-      .note { border-left: 3px solid var(--border); padding: 4px 0 4px 14px; color: var(--text-tertiary); font-size: 0.85rem; margin: 16px 0; }
-      .footer-links { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 0.875rem; }
-      .footer-links a { margin-right: 16px; }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <a class="back" href="/">← OntarioDriveTestMap</a>
-      <h1>About</h1>
-      <p class="tagline">A crowdsourced map of the DriveTest routes people actually drive — built from real evidence, not schematic guesses.</p>
-
-      <h2>The problem</h2>
-      <p>If you're studying for a G or G2 road test in Ontario, there's no official source telling you which streets your local DriveTest centre actually uses. What exists instead: template-clone sites that show a disclaimed "sample route" for free and gate the real one behind a purchase, or hand-drawn maps explicitly labeled "schematic, not to scale," assembled from anecdotes. Neither is built from anything you could call evidence.</p>
-
-      <h2>What this is instead</h2>
-      <p>OntarioDriveTestMap reconstructs routes from three real sources:</p>
-      <ul>
-        <li><strong>GPS traces</strong> — actual recorded drives along real DriveTest routes.</li>
-        <li><strong>Hand-transcribed test-drive videos</strong> — turn-by-turn instructions pulled from real footage.</li>
-        <li><strong>Community submissions</strong> — routes reported by people who've recently taken or driven a test, validated against real street data and corroborated against each other before being trusted.</li>
-      </ul>
-      <p>These sources are combined into a weighted graph of road segments, where a segment's weight reflects how many independent sources actually agree it belongs to a given route. Routes are reconstructed by walking that graph — not by anyone manually deciding what looks right.</p>
-
-      <h2>Confidence is data, not decoration</h2>
-      <p>Every route, and every section within a route, is labeled by how well-supported it actually is:</p>
-      <div class="badges">
-        <span class="badge badge--confirmed">Confirmed</span>
-        <span class="badge badge--predicted">Predicted</span>
-        <span class="badge badge--gap">Insufficient evidence</span>
+    <a href="#main" class="skip-link">Skip to content</a>
+    <header class="s-header">
+      <div class="s-header__inner">
+        <a class="s-brand" href="/" aria-label="OntarioDriveTestMap — home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M5 22 C5 13, 12 13, 14 13" fill="none" stroke="#0b756b" stroke-width="3.2" stroke-linecap="round"/><path d="M14 13 C18 13, 23 12, 23 5" fill="none" stroke="#97531b" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="3.2 3.6"/><circle cx="5" cy="22" r="2.6" fill="#102a43"/></svg><span class="s-brand__word">OntarioDriveTest<span>Map</span></span></a>
+        <nav class="s-nav" aria-label="Main"><a href="/">Find a centre</a><a href="/discussion.html">Discussion</a><a href="/about.html" aria-current="page">About</a></nav>
+        <a class="s-submit" href="/?submit=1">Submit a route</a>
+        <details class="s-menu"><summary>Menu</summary><nav aria-label="Main"><a href="/">Find a centre</a><a href="/discussion.html">Discussion</a><a href="/about.html" aria-current="page">About</a></nav></details>
       </div>
-      <p>This distinction is never blurred for the sake of a cleaner-looking map. A driving-test candidate could physically execute a turn no one ever confirmed — so predicted or unverified sections are always drawn and labeled differently from confirmed ones, everywhere they appear.</p>
+    </header>
 
-      <h2>Who this is for</h2>
-      <p>Mostly first-time or anxious test-takers looking for the real streets and turns their local centre uses — often on a phone, often the night before a test, sometimes reviewed in the car itself. There's also a smaller community of contributors who've recently taken or driven a route, and centre-specific discussion where people swap tips and ask questions.</p>
+    <main id="main" class="article">
+      <div class="article__col">
+        <p class="overline">About OntarioDriveTestMap</p>
+        <h1>Study routes built from evidence.</h1>
+        <p class="lede">This independent map reconstructs reported Ontario road-test routes. Routes may change: use them to prepare, not to predict your exact test.</p>
+        <nav class="contents" aria-label="On this page">
+          <a href="#sources">Where routes come from</a>
+          <a href="#confidence">How confidence works</a>
+          <a href="#processing">How data becomes a route</a>
+          <a href="#features">What you can do here</a>
+          <a href="#mobile">On your phone</a>
+          <a href="#mto">Official MTO records</a>
+          <a href="#limits">What the map can't promise</a>
+          <a href="#help">How to help</a>
+        </nav>
 
-      <div class="note">OntarioDriveTestMap is an independent, community-built project. It is not affiliated with, endorsed by, sponsored by, or operated on behalf of DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</div>
+        <h2 id="sources">Where routes come from</h2>
+        <p>DriveTest doesn't publish its routes. Every route here is reconstructed from what people actually drove or recorded, from three kinds of source:</p>
+        <ol class="sources">
+          <li>
+            <h3>Recorded drives</h3>
+            <p>GPS traces of real drives along DriveTest routes, where contributors have them. These give the most exact road geometry.</p>
+          </li>
+          <li>
+            <h3>Video-transcribed test drives</h3>
+            <p>Test-drive videos transcribed street by street by a person watching them, then matched to the real road network.</p>
+          </li>
+          <li>
+            <h3>Community reports</h3>
+            <p>Routes described by people who recently took or practised a test. Each street is checked against real Ontario street data, and a report only counts toward a route when it agrees with other, independent evidence.</p>
+          </li>
+        </ol>
+        <p>A single observation isn't a confirmation. Sources are grouped by the physical route they describe and weighted by how many independent people or recordings back each stretch of road. Routes come out of that computation, not out of anyone deciding what looks right.</p>
 
-      <h2>How a route actually gets on the map</h2>
-      <p>Nothing appears here because one person decided it looked right. A route only shows up once real evidence points to it, and it only gets labeled "Confirmed" once enough of that evidence agrees:</p>
-      <ul>
-        <li><strong>A trace, transcription, or submission comes in.</strong> Each one is checked against real Ontario street-network data before it's accepted — a street that doesn't exist, or two streets that don't actually connect, gets rejected at that point, not silently included.</li>
-        <li><strong>It's checked against everyone else's.</strong> The clustering pipeline groups submissions that describe the same physical route together, and weighs each one by how many independent people or sources back it up. A single unconfirmed report doesn't outrank a well-corroborated one.</li>
-        <li><strong>Confidence is computed, not chosen.</strong> Once a cluster of agreeing evidence crosses a real threshold, the route is promoted to Confirmed automatically. Below that threshold, it stays visible but honestly labeled Predicted or Insufficient evidence — it's never quietly upgraded to look more certain than it is.</li>
-      </ul>
+        <h2 id="confidence">How confidence works</h2>
+        <p>Every section of a route carries one of these labels, and the map, legend, route panel and turn list all use the same line and the same word:</p>
+        <ul class="notation">
+          <li>
+            <svg width="64" height="10" viewBox="0 0 64 10" aria-hidden="true"><line x1="2" y1="5" x2="62" y2="5" stroke="#0b756b" stroke-width="4" stroke-linecap="round"/></svg>
+            <span><b>Confirmed</b>Hand-transcribed from a test-drive video, or backed by enough independent sources to pass the confirmation threshold.</span>
+          </li>
+          <li>
+            <svg width="64" height="10" viewBox="0 0 64 10" aria-hidden="true"><line x1="2" y1="5" x2="62" y2="5" stroke="#97531b" stroke-width="4" stroke-dasharray="7 6"/></svg>
+            <span><b>Inferred</b>Either a road-snapped connection between two confirmed points that no source actually drove, or real evidence that's weaker than the threshold. Study it, but don't rely on it.</span>
+          </li>
+          <li>
+            <svg width="64" height="10" viewBox="0 0 64 10" aria-hidden="true"><line x1="2" y1="5" x2="62" y2="5" stroke="#6a7a86" stroke-width="3" stroke-dasharray="2 6"/></svg>
+            <span><b>Unrouted gap</b>The data jumps in a straight line because two pieces don't connect in the map data. It isn't a road.</span>
+          </li>
+        </ul>
+        <p>Colour is never the only signal: the line pattern and the word always go together, so the labels survive printing in greyscale and colour-vision differences. A route called confirmed can still contain inferred sections; the route panel lists them separately instead of rounding them up.</p>
 
-      <h2>How to help</h2>
-      <p>This map only gets better with more real evidence behind it. A few ways to contribute, all from inside the app:</p>
-      <ul>
-        <li><strong>Submit a route</strong> if you've recently driven or taken a test at a centre — the submission wizard walks through it street by street and checks each one against the real road network as you go.</li>
-        <li><strong>Report an error</strong> directly on a turn-by-turn instruction if something looks wrong — this feeds the same evidence system, not a black hole.</li>
-        <li><strong>Use the forum and Discussion board</strong> to share what actually happened on your test, ask questions, or flag a route that's changed. Community reports are one of the three real data sources this map is built from, not a separate comment section bolted on top.</li>
-      </ul>
+        <figure class="figure">
+          <svg viewBox="0 0 640 150" role="img" aria-labelledby="fig-title">
+            <title id="fig-title">Illustrative legend: a route that starts confirmed, has an inferred middle section, and a short unrouted gap</title>
+            <path d="M24 118 C80 118 96 60 170 60 L300 60" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+            <path d="M24 118 C80 118 96 60 170 60 L300 60" fill="none" stroke="#0b756b" stroke-width="5" stroke-linecap="round"/>
+            <path d="M300 60 C360 60 380 104 450 104" fill="none" stroke="#97531b" stroke-width="5" stroke-dasharray="10 9"/>
+            <path d="M450 104 L520 70" fill="none" stroke="#6a7a86" stroke-width="3" stroke-dasharray="2 8"/>
+            <path d="M520 70 L616 70" fill="none" stroke="#0b756b" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="24" cy="118" r="7" fill="#102a43" stroke="#fff" stroke-width="3"/>
+            <text x="120" y="40" font-size="13" font-weight="700" fill="#096c64" font-family="Manrope, sans-serif">Confirmed</text>
+            <text x="336" y="132" font-size="13" font-weight="700" fill="#97531b" font-family="Manrope, sans-serif">Inferred</text>
+            <text x="456" y="56" font-size="13" font-weight="700" fill="#536675" font-family="Manrope, sans-serif">Gap</text>
+            <text x="40" y="142" font-size="12" fill="#536675" font-family="Manrope, sans-serif">DriveTest centre</text>
+          </svg>
+          <figcaption>Illustrative legend only. This isn't a real route.</figcaption>
+        </figure>
 
-      <h2>Coverage and honest limitations</h2>
-      <p>Coverage varies by centre — some have years of corroborated traces and video transcriptions behind them; newer or smaller centres may have thin or no data yet, and that's shown plainly rather than papered over with a guess. Routes can also genuinely change over time (construction, new signage, a centre updating its test pattern), and this map reflects what's been observed and reported, not a live feed from DriveTest itself — treat it as strong evidence about what's likely, not a guarantee of what you'll be asked to drive on test day.</p>
+        <h2 id="processing">How data becomes a route, now and in future</h2>
+        <p>Every source, old or new, goes through the same pipeline. Nobody hand-picks what goes on the map, and new data can raise or lower a route's confidence.</p>
+        <ol class="sources pipeline">
+          <li>
+            <h3>Checked against the real road network</h3>
+            <p>Each street is matched to OpenStreetMap data for Ontario. A street that doesn't exist, or two streets that don't actually meet, is rejected on the spot. Submissions are checked this way street by street as you add them.</p>
+          </li>
+          <li>
+            <h3>Grouped with everything else</h3>
+            <p>Sources that describe the same physical drive are clustered together. A report that doesn't match anything else stays aside as an outlier instead of being forced into a route.</p>
+          </li>
+          <li>
+            <h3>Weighted, not just counted</h3>
+            <p>Each stretch of road is weighted by how many independent people or recordings support it. Several reports from one account count once, and older evidence gradually counts for less than recent evidence, because routes change.</p>
+          </li>
+          <li>
+            <h3>Labelled by the same threshold</h3>
+            <p>A section becomes <strong>Confirmed</strong> only once its support passes the same threshold that applies to all data. Below that, it's shown as <strong>Inferred</strong>. Where two pieces of road don't connect in the map data, the jump is drawn as an <strong>Unrouted gap</strong>, never as a road.</p>
+          </li>
+          <li>
+            <h3>Drawn and placed on the map</h3>
+            <p>Confirmed sequences are snapped to real roads for the map line, and each turn is placed on the map only if its street names match a real junction on that route.</p>
+          </li>
+        </ol>
+        <h3 class="subhead">What happens to new data</h3>
+        <ul class="limits">
+          <li><strong>Your route submissions</strong> stay <em>pending</em> until they're corroborated. A submitted route is added to the map only when at least two different accounts describe the same route and it passes the confirmation threshold. Promotion runs in batches, so it isn't instant.</li>
+          <li><strong>Corrections</strong> reported on a turn are saved for review. A report doesn't change the map on its own.</li>
+          <li><strong>New centres</strong> appear in the centre list as soon as they have evidence. Until then, you can still submit a route for them.</li>
+          <li><strong>Official records</strong> (see <a href="#mto">below</a>), if released, will be added as their own labelled source and weighed in the same pipeline, not treated as automatically correct.</li>
+          <li>When a route is recalculated with new evidence, its confidence labels update to match. A route can gain confirmed sections, or lose them if newer data disagrees.</li>
+        </ul>
 
-      <h2>Design philosophy</h2>
-      <p>This is built as a civic utility, not a product being sold — calm and legible for someone checking a route under real pressure, not slick for a screenshot. Low visual noise, real texture (actual street names, actual vote and source counts) over synthetic polish, and no urgency-manufacturing patterns.</p>
+        <h2 id="features">What you can do here</h2>
+        <p>Everything below works in any modern browser. Reading routes is open to everyone; items marked <span class="acct">Account</span> need a free Google sign-in.</p>
+        <div class="features">
+          <section>
+            <h3>Find and study a route</h3>
+            <ul>
+              <li><strong>Centre search</strong> with separate confirmed and inferred route counts for every centre that has evidence.</li>
+              <li><strong>Route maps</strong> for G and G2, with every section labelled confirmed, inferred or unrouted gap.</li>
+              <li><strong>Shareable route links</strong> that open the exact centre, class and route.</li>
+              <li><strong>Turn-by-turn list</strong> with distance, time, traffic control and posted speed where the data has them.</li>
+              <li><strong>Numbered turn points</strong> on the map for turns matched to a real junction on the route. Select a turn to find it, or a point to find its turn.</li>
+              <li><strong>Route playback</strong>: a dot drives the route from the centre to the end, at 0.5×, 1×, 2× or 4×, with a slider to jump anywhere.</li>
+              <li><strong>Map layers</strong>: show the individual evidence points and colour them by how well they're supported.</li>
+              <li><strong>Export</strong> a route as a GPX file or print the turn list.</li>
+              <li><strong>Compare centres</strong> by confirmed route count, average length and number of steps.</li>
+            </ul>
+          </section>
+          <section>
+            <h3>Check the evidence</h3>
+            <ul>
+              <li><strong>Evidence for each centre</strong>: how many video transcriptions and community reports it's built from.</li>
+              <li><strong>Source list</strong> with each record's type, class and date. <span class="acct">Account</span></li>
+            </ul>
+          </section>
+          <section>
+            <h3>Contribute</h3>
+            <ul>
+              <li><strong>Submit a route</strong> street by street; each street is checked against the real road network as you add it. <span class="acct">Account</span></li>
+              <li><strong>Report an issue</strong> on a specific turn. <span class="acct">Account</span></li>
+              <li><strong>Tips and corrections</strong> for a centre, and a site-wide <strong>discussion</strong> board with questions, test experiences and tips. <span class="acct">Account</span></li>
+            </ul>
+          </section>
+          <section>
+            <h3>Your account</h3>
+            <ul>
+              <li><strong>Test reminders</strong> for a date you choose, shown in the notification bell. <span class="acct">Account</span></li>
+              <li><strong>Notifications</strong> when someone replies to or mentions you. <span class="acct">Account</span></li>
+              <li><strong>English and French</strong>, remembered across pages, and <strong>self-service account deletion</strong>.</li>
+            </ul>
+          </section>
+        </div>
 
-      <div class="footer-links">
-        <a href="/">Home</a>
-        <a href="/discussion.html">Discussion</a>
-        <a href="/privacy-policy.html">Privacy</a>
-        <a href="/terms-of-service.html">Terms</a>
-        <a href="/cookie-policy.html">Cookies</a>
+        <h2 id="mobile">On your phone</h2>
+        <p>There's no app to install: the full site works in your phone's browser (Safari on iPhone, Chrome on Android), laid out for small screens. For quick access, use your browser's <strong>Add to Home Screen</strong> (on iPhone: Share, then Add to Home Screen).</p>
+        <p>The phone version adds <strong>Practice drive</strong>: a full-screen map that follows your live position along the route you picked, with a large turn list and simple Pause and End buttons. It's built for a passenger or a parked car, and it's honest about what a web page can do:</p>
+        <ul class="limits">
+          <li>It only tracks while the page is open and the screen is on. If you switch apps or lock the phone, it stops and asks you to recheck your location when you come back.</li>
+          <li>It shows where you are on the route and warns if you seem to be off it. It doesn't give spoken directions or reroute you.</li>
+          <li>Your live location stays on your phone. It isn't sent to us or stored.</li>
+        </ul>
+
+        <h2 id="mto">Official MTO records</h2>
+        <p>DriveTest doesn't publish its routes. We've asked the Ontario Ministry of Transportation for route-related records through a Freedom of Information (FOI) request. If and when records are released, we'll add them as their own clearly labelled source, together with a note on what they do and don't show. Until then, nothing on this map comes from MTO or DriveTest.</p>
+
+        <h2 id="limits">What the map can't promise</h2>
+        <ul class="limits">
+          <li><strong>Your exact route.</strong> Examiners can choose different streets, and centres change their patterns. A confirmed route is one people have driven, not one you'll be assigned.</li>
+          <li><strong>Up-to-date roads.</strong> Construction and new signage can make a section out of date before new evidence arrives.</li>
+          <li><strong>Every centre.</strong> Coverage depends on contributions. Some centres have many sources, some have few, and some have none yet. The app shows that plainly instead of filling it with guesses.</li>
+          <li><strong>Background tracking.</strong> Practice drive only follows your position while the page stays open on screen (see <a href="#mobile">On your phone</a>).</li>
+        </ul>
+
+        <h2 id="help">How to help</h2>
+        <p>Each new piece of evidence can move a section from inferred to confirmed for the next person. You can submit a route street by street (each street is checked against the road network as you go), report an issue on a specific turn, or share a tip for your centre.</p>
+        <div class="cta">
+          <a class="primary" href="/">Find your centre</a>
+          <a href="/?submit=1">Contribute evidence</a>
+        </div>
+
+        <p class="disclaimer">OntarioDriveTestMap is an independent, community-built project. It isn't affiliated with, endorsed by, sponsored by, or operated on behalf of DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</p>
       </div>
-    </div>
+    </main>
+
+    <footer class="s-footer">
+      <div class="s-footer__inner">
+        <div>
+          <strong>OntarioDriveTestMap</strong>
+          <p>Not affiliated with, endorsed by, or officially connected to DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</p>
+        </div>
+        <nav aria-label="Legal">
+          <a href="/about.html" aria-current="page">About</a>
+          <a href="/privacy-policy.html">Privacy</a>
+          <a href="/terms-of-service.html">Terms</a>
+          <a href="/cookie-policy.html">Cookies</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

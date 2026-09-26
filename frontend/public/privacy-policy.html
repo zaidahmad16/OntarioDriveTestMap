@@ -2,12 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* One canonical host: www (Railway serves it too) redirects to the
+         apex before anything loads, so sign-in, cookies and canonical
+         URLs only ever see ontariodrivetestmap.fyi. */
+      if (location.hostname === "www.ontariodrivetestmap.fyi") {
+        location.replace("https://ontariodrivetestmap.fyi" + location.pathname + location.search + location.hash);
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Privacy Policy — OntarioDriveTestMap</title>
     <meta name="description" content="How OntarioDriveTestMap collects, uses, and protects your personal information." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -25,7 +33,7 @@
       a.back { color: var(--text-secondary); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
       a.back:hover { color: var(--text-primary); }
       h1 {
-        font-family: "Newsreader", Georgia, serif; font-weight: 500;
+        font-family: inherit; font-weight: 500;
         font-size: 2.25rem; margin: 24px 0 4px;
       }
       .updated { color: var(--text-tertiary); font-size: 0.8125rem; margin: 0 0 8px; }
@@ -55,9 +63,19 @@
       nav.toc li { font-size: 0.875rem; margin: 3px 0; }
       .note { border-left: 3px solid var(--border); padding: 4px 0 4px 14px; color: var(--text-tertiary); font-size: 0.85rem; }
     </style>
+    <link rel="stylesheet" href="/static-site.css" />
   </head>
   <body>
-    <div class="wrap">
+    <a href="#main" class="skip-link">Skip to content</a>
+    <header class="s-header">
+      <div class="s-header__inner">
+        <a class="s-brand" href="/" aria-label="OntarioDriveTestMap — home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M5 22 C5 13, 12 13, 14 13" fill="none" stroke="#0b756b" stroke-width="3.2" stroke-linecap="round"/><path d="M14 13 C18 13, 23 12, 23 5" fill="none" stroke="#97531b" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="3.2 3.6"/><circle cx="5" cy="22" r="2.6" fill="#102a43"/></svg><span class="s-brand__word">OntarioDriveTest<span>Map</span></span></a>
+        <nav class="s-nav" aria-label="Main"><a href="/">Find a centre</a><a href="/discussion.html">Discussion</a><a href="/about.html">About</a></nav>
+        <a class="s-submit" href="/?submit=1">Submit a route</a>
+        <details class="s-menu"><summary>Menu</summary><nav aria-label="Main"><a href="/">Find a centre</a><a href="/discussion.html">Discussion</a><a href="/about.html">About</a></nav></details>
+      </div>
+    </header>
+    <main id="main" class="wrap">
       <a class="back" href="/">← OntarioDriveTestMap</a>
       <h1>Privacy Policy</h1>
       <p class="updated">Last updated September 21, 2026</p>
@@ -121,7 +139,7 @@
       <h2 id="use">2. How do we use your information?</h2>
       <p>We use personal information only for these purposes:</p>
       <ul>
-        <li><strong>To provide the service.</strong> Your account data lets you sign in, submit routes, track quiz progress, use drive-along mode, and manage your own account.</li>
+        <li><strong>To provide the service.</strong> Your account data lets you sign in, submit routes, report corrections, post in the forum and discussion, set reminders, and manage your own account. Reading route maps and using practice drive don't require an account.</li>
         <li><strong>To enable user-to-user communication.</strong> Your username and posted content are shown to other users so the forum and discussion features work, and to generate in-app notifications (mentions, replies).</li>
         <li><strong>For community moderation and route trust scoring.</strong> Votes, reports, and submissions power automated content moderation and the confidence scoring (confirmed / predicted / insufficient evidence) applied to community-submitted route data.</li>
       </ul>
@@ -190,6 +208,20 @@
       <p>You can delete your account and personal data at any time by signing in and using the "Delete account" option in the site header — this is self-service and takes effect immediately. For any other access, correction, or deletion request, email <a href="mailto:privacy@ontariodrivetestmap.fyi">privacy@ontariodrivetestmap.fyi</a>.</p>
 
       <p><a href="/">← Back to OntarioDriveTestMap</a> · <a href="/terms-of-service.html">Terms of Service</a> · <a href="/cookie-policy.html">Cookie Policy</a></p>
-    </div>
+    </main>
+    <footer class="s-footer">
+      <div class="s-footer__inner">
+        <div>
+          <strong>OntarioDriveTestMap</strong>
+          <p>Not affiliated with, endorsed by, or officially connected to DriveTest, Serco Canada Inc., or the Ontario Ministry of Transportation.</p>
+        </div>
+        <nav aria-label="Legal">
+          <a href="/about.html">About</a>
+          <a href="/privacy-policy.html">Privacy</a>
+          <a href="/terms-of-service.html">Terms</a>
+          <a href="/cookie-policy.html">Cookies</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

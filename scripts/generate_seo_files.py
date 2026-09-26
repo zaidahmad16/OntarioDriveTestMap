@@ -38,34 +38,30 @@ def fetch_urls():
     # Homepage -- always indexable.
     urls.append({"loc": SITE_URL + "/", "changefreq": "weekly", "priority": "1.0"})
 
-    # Discussion feed -- always indexable.
-    urls.append({"loc": SITE_URL + "/discussion.html", "changefreq": "hourly", "priority": "0.8"})
+    # About -- the public explainer of sources, confidence and features.
+    urls.append({"loc": SITE_URL + "/about.html", "changefreq": "monthly", "priority": "0.6"})
 
-    # Centres: each is genuinely distinct content, worth indexing on its
-    # own query-param URL. Route-class (G/G2) filter states within a
-    # centre are NOT separately listed -- they're a subset view of the
-    # same centre content, not distinct enough to warrant their own entry
-    # (see the audit report's canonical-URL reasoning).
-    for c in query("SELECT id FROM centres ORDER BY id"):
+    # Discussion feed page (its posts need sign-in to read, so individual
+    # post URLs are NOT listed -- a crawler would only hit the sign-in
+    # screen).
+    urls.append({"loc": SITE_URL + "/discussion.html", "changefreq": "daily", "priority": "0.5"})
+
+    # Centres with evidence. Route maps and turns are public (2026-09-25),
+    # so each centre page is real indexable content. Centres with no
+    # evidence yet (e.g. Winchester) are hidden from browsing and skipped
+    # here too. G/G2/route deep links are views of the same page and are
+    # not listed separately.
+    for c in query(
+        """SELECT c.id FROM centres c
+           WHERE EXISTS (SELECT 1 FROM traces t WHERE t.centre_id = c.id)
+              OR EXISTS (SELECT 1 FROM consensus_segments s WHERE s.centre_id = c.id)
+           ORDER BY c.id"""
+    ):
         urls.append({
             "loc": f"{SITE_URL}/?centre={quote(c['id'])}",
             "changefreq": "weekly",
-            "priority": "0.7",
+            "priority": "0.8",
         })
-
-    # Public discussion posts -- real content, real created_at for
-    # lastmod (never fabricated).
-    for row in query(
-        "SELECT id, created_at FROM discussion_posts ORDER BY created_at DESC LIMIT 2000"
-    ):
-        entry = {
-            "loc": f"{SITE_URL}/discussion.html?post={row['id']}",
-            "changefreq": "monthly",
-            "priority": "0.5",
-        }
-        if row.get("created_at"):
-            entry["lastmod"] = row["created_at"].date().isoformat()
-        urls.append(entry)
 
     return urls
 

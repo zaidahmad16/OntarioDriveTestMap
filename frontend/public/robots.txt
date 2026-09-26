@@ -6,4 +6,4 @@ Disallow: /admin
 Disallow: /account
 Disallow: /notifications
 
-Sitemap: http://localhost:5173/sitemap.xml
+Sitemap: https://ontariodrivetestmap.fyi/sitemap.xml
