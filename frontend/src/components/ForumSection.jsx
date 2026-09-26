@@ -98,7 +98,7 @@ function CommentThread({ postId, username, onCommented }) {
             {c.can_delete && (
               <button
                 onClick={() => remove(c.id)}
-                style={{ marginLeft: 8, fontSize: "0.85em", border: "none", background: "none", color: "var(--confirmed)", padding: 0 }}
+                style={{ marginLeft: 8, fontSize: "0.85em", border: "none", background: "none", color: "var(--danger)", padding: 0 }}
               >
                 {t("delete")}
               </button>
@@ -135,7 +135,7 @@ function CommentThread({ postId, username, onCommented }) {
       ) : (
         <p style={{ fontSize: "0.8em", color: "var(--ink-muted)", marginTop: 8 }}>{t("needUsernameToPost")}</p>
       )}
-      {error && <p style={{ color: "var(--confirmed)", fontSize: "0.8em" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)", fontSize: "0.8em" }}>{error}</p>}
     </div>
   );
 }
@@ -165,7 +165,7 @@ function ForumPostRow({ post, username, onChanged, index }) {
       className="card card-interactive"
       style={{
         borderStyle: post.hidden ? "dashed" : "solid",
-        borderColor: post.hidden ? "var(--confirmed)" : "var(--border)",
+        borderColor: post.hidden ? "var(--danger)" : "var(--border)",
         padding: 14,
         marginBottom: 10,
       }}
@@ -195,7 +195,7 @@ function ForumPostRow({ post, username, onChanged, index }) {
               border: "none",
               background: "none",
               padding: 2,
-              color: post.my_vote === -1 ? "var(--confirmed)" : "var(--ink-faint)",
+              color: post.my_vote === -1 ? "var(--danger)" : "var(--ink-faint)",
               transition: "color var(--duration-fast) var(--ease-out-quart)",
             }}
           >
@@ -209,14 +209,14 @@ function ForumPostRow({ post, username, onChanged, index }) {
               · {post.centre_name} · {post.test_class} · {new Date(post.created_at).toLocaleDateString()}
             </span>
             {post.hidden && (
-              <span className="trust-badge trust-badge--confirmed" style={{ marginLeft: 6 }}>
+              <span className="trust-badge trust-badge--danger" style={{ marginLeft: 6 }}>
                 {t("hiddenFromPublic")}
               </span>
             )}
             {post.can_delete && (
               <button
                 onClick={remove}
-                style={{ marginLeft: 8, fontSize: "0.8em", border: "none", background: "none", color: "var(--confirmed)", padding: 0 }}
+                style={{ marginLeft: 8, fontSize: "0.8em", border: "none", background: "none", color: "var(--danger)", padding: 0 }}
               >
                 {t("delete")}
               </button>
@@ -226,7 +226,7 @@ function ForumPostRow({ post, username, onChanged, index }) {
             <span className="trust-badge trust-badge--gap">📍 {post.street_a} × {post.street_b}</span>
             <span className="trust-badge trust-badge--gap">{maneuverLabel(post.maneuver_type)}</span>
             {post.outcome && (
-              <span className={`trust-badge trust-badge--${post.outcome === "pass" ? "success" : "confirmed"}`}>
+              <span className={`trust-badge trust-badge--${post.outcome === "pass" ? "success" : "danger"}`}>
                 {outcomeLabel(post.outcome)}
               </span>
             )}
@@ -264,9 +264,8 @@ function ForumPostRow({ post, username, onChanged, index }) {
   );
 }
 
-function NewForumPost({ centreId, centreName, username, onPosted }) {
+function NewForumPost({ centreId, centreName, username, onPosted, open, setOpen }) {
   const { t } = useLang();
-  const [open, setOpen] = useState(false);
   const [testClass, setTestClass] = useState("G");
   const [streetA, setStreetA] = useState("");
   const [streetB, setStreetB] = useState("");
@@ -344,16 +343,10 @@ function NewForumPost({ centreId, centreName, username, onPosted }) {
   }
 
   return (
-    <div style={{ margin: "12px 0" }}>
-      <button onClick={() => setOpen((o) => !o)} className={open ? "btn-primary" : undefined}>
-        {t("newForumPost")}{" "}
-        <span style={{ display: "inline-block", transition: "transform var(--duration-base) var(--ease-out-quart)", transform: open ? "rotate(180deg)" : "none" }}>
-          ▾
-        </span>
-      </button>
-      {open && !username && <p style={{ color: "var(--ink-muted)", fontSize: "0.85em" }}>{t("needUsernameToPost")}</p>}
+    <div className="tips-composer">
+      {open && !username && <p className="state-panel">{t("needUsernameToPost")}</p>}
       {open && username && (
-        <div className="card scale-in" style={{ marginTop: 10, maxWidth: 480 }}>
+        <div className="card composer-card">
           <p style={{ fontSize: "0.8em", color: "var(--ink-muted)" }}>{t("forumPostHint")}</p>
 
           <label style={{ display: "block", fontSize: "0.85em", fontWeight: 600, marginBottom: 4 }}>{t("class")}</label>
@@ -373,7 +366,7 @@ function NewForumPost({ centreId, centreName, username, onPosted }) {
                 resetCheck();
               }}
               placeholder={t("streetA")}
-              style={{ flex: "1 1 140px", borderColor: checkError ? "var(--confirmed)" : undefined }}
+              style={{ flex: "1 1 140px", borderColor: checkError ? "var(--danger)" : undefined }}
             />
             <input
               value={streetB}
@@ -382,7 +375,7 @@ function NewForumPost({ centreId, centreName, username, onPosted }) {
                 resetCheck();
               }}
               placeholder={t("streetB")}
-              style={{ flex: "1 1 140px", borderColor: checkError ? "var(--confirmed)" : undefined }}
+              style={{ flex: "1 1 140px", borderColor: checkError ? "var(--danger)" : undefined }}
             />
             <button onClick={checkJunction} disabled={checking || !streetA.trim() || !streetB.trim()}>
               {checking ? t("checking") : t("checkJunction")}
@@ -393,7 +386,7 @@ function NewForumPost({ centreId, centreName, username, onPosted }) {
               ✓ {t("realJunction")}
             </p>
           )}
-          {checkError && <p style={{ color: "var(--confirmed)", fontSize: "0.85em", margin: "6px 0 0" }}>{checkError}</p>}
+          {checkError && <p style={{ color: "var(--danger)", fontSize: "0.85em", margin: "6px 0 0" }}>{checkError}</p>}
 
           <label style={{ display: "block", marginTop: 12, fontSize: "0.85em", fontWeight: 600, marginBottom: 4 }}>
             {t("maneuverType")}
@@ -432,12 +425,15 @@ function NewForumPost({ centreId, centreName, username, onPosted }) {
             <a href="/terms-of-service.html" target="_blank" rel="noopener">{t("terms")}</a>.
           </p>
 
-          <div style={{ marginTop: 8 }}>
+          <div className="form-actions">
             <button className="btn-primary" onClick={submit} disabled={!checked || submitting}>
               {submitting ? t("loading") : t("submit")}
             </button>
+            <button type="button" onClick={() => setOpen(false)}>
+              {t("cancel")}
+            </button>
           </div>
-          {error && <p style={{ color: "var(--confirmed)", fontSize: "0.85em" }}>{error}</p>}
+          {error && <p style={{ color: "var(--danger)", fontSize: "0.85em" }}>{error}</p>}
           {sent && <p style={{ color: "var(--success)", fontSize: "0.85em" }}>{t("submissionSent")}</p>}
         </div>
       )}
@@ -449,25 +445,68 @@ export default function ForumSection({ centreId, centreName, username }) {
   const { t } = useLang();
   const [posts, setPosts] = useState(null);
   const [error, setError] = useState(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   function load() {
+    setError(null);
     api.getForumPosts(centreId).then(setPosts).catch((err) => setError(err.message));
   }
 
   useEffect(() => {
     setPosts(null);
     setError(null);
+    setComposerOpen(false);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centreId]);
 
+  // Centre-scoped tips (spec §5.6) -- deliberately distinct from the
+  // site-wide Discussion board, which is linked rather than duplicated.
   return (
-    <div style={{ marginTop: 20 }}>
-      <h3>{t("forum")}</h3>
-      <NewForumPost centreId={centreId} centreName={centreName} username={username} onPosted={load} />
-      {error && <p className="error-banner">{t("error")}: {error}</p>}
-      {posts && posts.length === 0 && <p style={{ color: "var(--ink-muted)" }}>{t("noForumPosts")}</p>}
-      {posts && posts.map((p, i) => <ForumPostRow key={p.id} post={p} username={username} onChanged={load} index={i} />)}
-    </div>
+    <section className="page-section" id="centre-tips" aria-labelledby="tips-title">
+      <div className="page-section__head page-section__head--row">
+        <div>
+          <h2 id="tips-title">{t("tipsForCentre").replace("{centre}", centreName)}</h2>
+          <p className="page-section__lede">
+            {t("tipsLede")}{" "}
+            <a href={`/discussion.html?centre=${encodeURIComponent(centreId)}`}>{t("siteWideDiscussion")}</a>
+          </p>
+        </div>
+        {!composerOpen && posts?.length > 0 && (
+          <button type="button" onClick={() => setComposerOpen(true)}>
+            {t("shareExperience")}
+          </button>
+        )}
+      </div>
+      <NewForumPost
+        centreId={centreId}
+        centreName={centreName}
+        username={username}
+        onPosted={load}
+        open={composerOpen}
+        setOpen={setComposerOpen}
+      />
+      {error ? (
+        <div className="state-panel state-panel--error" role="alert">
+          <p>{t("tipsLoadFailed")}</p>
+          <button type="button" onClick={load}>
+            {t("retry")}
+          </button>
+        </div>
+      ) : posts === null ? (
+        <div className="skeleton-block" aria-busy="true" />
+      ) : posts.length === 0 ? (
+        !composerOpen && (
+          <div className="state-panel">
+            <p>{t("noTipsYet")}</p>
+            <button type="button" className="btn-primary" onClick={() => setComposerOpen(true)}>
+              {t("shareExperience")}
+            </button>
+          </div>
+        )
+      ) : (
+        posts.map((p, i) => <ForumPostRow key={p.id} post={p} username={username} onChanged={load} index={i} />)
+      )}
+    </section>
   );
 }

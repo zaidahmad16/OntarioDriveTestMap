@@ -40,7 +40,7 @@ export default function UsernamePrompt({ onSet }) {
           {saving ? t("loading") : t("save")}
         </button>
       </div>
-      {error && <p style={{ color: "var(--confirmed)", fontSize: "0.8125rem", margin: "var(--space-xs) 0 0" }}>{error}</p>}
+      {error && <p style={{ color: "var(--danger)", fontSize: "0.8125rem", margin: "var(--space-xs) 0 0" }}>{error}</p>}
     </div>
   );
 }

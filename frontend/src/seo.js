@@ -5,8 +5,11 @@ import { useEffect } from "react";
 // wrong just because VITE_SITE_URL wasn't set for a given environment --
 // but production deploys should set VITE_SITE_URL explicitly so the value
 // is stable even behind a proxy/CDN.
+// Production pins the apex domain so www (or the raw Railway hostname)
+// never becomes a canonical URL; dev keeps the real local origin.
 export const SITE_URL = (
-  import.meta.env.VITE_SITE_URL || window.location.origin
+  import.meta.env.VITE_SITE_URL ||
+  (import.meta.env.PROD ? "https://ontariodrivetestmap.fyi" : window.location.origin)
 ).replace(/\/$/, "");
 
 function setMeta(attr, key, content) {

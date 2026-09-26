@@ -18,11 +18,11 @@ function inDays(n) {
   return d.toISOString().slice(0, 10);
 }
 
-export default function BookingReminderButton({ centres }) {
+export default function BookingReminderButton({ centres, defaultCentreId }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(inDays(14));
-  const [centreId, setCentreId] = useState("");
+  const [centreId, setCentreId] = useState(defaultCentreId || "");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -57,21 +57,26 @@ export default function BookingReminderButton({ centres }) {
   }
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
+    <div className="reminder-menu" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
       <button
-        className="btn-ghost"
+        type="button"
+        className="reminder-menu__trigger"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={t("reminderTrigger")}
         onClick={() => setOpen((o) => !o)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
       >
-        <ClockIcon /> {t("setReminder")}
+        <ClockIcon aria-hidden="true" />
+        <span className="reminder-menu__long">{t("reminderTrigger")}</span>
+        <span className="reminder-menu__short" aria-hidden="true">{t("reminderShort")}</span>
       </button>
       {open && (
-        <div className="popover-panel popover" style={{ width: 300, padding: "var(--space-md)" }}>
-          <p style={{ margin: "0 0 var(--space-sm)", color: "var(--ink-muted)", fontSize: "0.8125rem" }}>
+        <div className="popover-panel popover reminder-menu__panel" role="dialog" aria-label={t("reminderTrigger")}>
+          <p style={{ margin: "0 0 var(--space-sm)", color: "var(--ink-muted)", fontSize: "0.875rem" }}>
             {t("reminderHint")}
           </p>
 
-          <label style={{ display: "block", marginBottom: "var(--space-sm)", fontSize: "0.8125rem", fontWeight: 600 }}>
+          <label style={{ display: "block", marginBottom: "var(--space-sm)", fontSize: "0.875rem", fontWeight: 600 }}>
             {t("reminderDate")}
             <input
               type="date"
@@ -81,7 +86,7 @@ export default function BookingReminderButton({ centres }) {
             />
           </label>
 
-          <label style={{ display: "block", marginBottom: "var(--space-sm)", fontSize: "0.8125rem", fontWeight: 600 }}>
+          <label style={{ display: "block", marginBottom: "var(--space-sm)", fontSize: "0.875rem", fontWeight: 600 }}>
             {t("centreOptional")}
             <select
               value={centreId}
@@ -97,7 +102,7 @@ export default function BookingReminderButton({ centres }) {
             </select>
           </label>
 
-          <label style={{ display: "block", marginBottom: "var(--space-md)", fontSize: "0.8125rem", fontWeight: 600 }}>
+          <label style={{ display: "block", marginBottom: "var(--space-md)", fontSize: "0.875rem", fontWeight: 600 }}>
             {t("reminderNoteOptional")}
             <input
               value={note}
@@ -111,18 +116,18 @@ export default function BookingReminderButton({ centres }) {
             {saving ? t("loading") : t("setReminderButton")}
           </button>
           {sent && (
-            <p className="fade-in" style={{ color: "var(--success)", margin: "var(--space-sm) 0 0", fontSize: "0.8125rem" }}>
+            <p className="fade-in" style={{ color: "var(--success)", margin: "var(--space-sm) 0 0", fontSize: "0.875rem" }}>
               {t("reminderSet")}
             </p>
           )}
           {error && (
-            <p style={{ color: "var(--confirmed)", margin: "var(--space-sm) 0 0", fontSize: "0.8125rem" }}>{error}</p>
+            <p style={{ color: "var(--danger)", margin: "var(--space-sm) 0 0", fontSize: "0.875rem" }}>{error}</p>
           )}
 
           {reminders && reminders.length > 0 && (
             <>
               <hr style={{ margin: "var(--space-md) 0", border: "none", borderTop: "1px solid var(--border)" }} />
-              <p style={{ fontWeight: 600, fontSize: "0.8125rem", margin: "0 0 var(--space-xs)" }}>{t("yourReminders")}</p>
+              <p style={{ fontWeight: 600, fontSize: "0.875rem", margin: "0 0 var(--space-xs)" }}>{t("yourReminders")}</p>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", maxHeight: 140, overflowY: "auto" }}>
                 {reminders.map((r) => (
                   <li
@@ -134,7 +139,7 @@ export default function BookingReminderButton({ centres }) {
                       gap: 6,
                       padding: "6px 0",
                       borderBottom: "1px solid var(--border)",
-                      fontSize: "0.8125rem",
+                      fontSize: "0.875rem",
                     }}
                   >
                     <span>
@@ -146,7 +151,7 @@ export default function BookingReminderButton({ centres }) {
                         {r.notified ? t("reminderDone") : t("reminderPending")}
                       </span>
                     </span>
-                    <button onClick={() => remove(r.id)} style={{ padding: "2px 8px", fontSize: "0.75rem" }}>
+                    <button onClick={() => remove(r.id)} style={{ padding: "2px 8px", fontSize: "0.875rem" }}>
                       {t("delete")}
                     </button>
                   </li>
@@ -155,7 +160,7 @@ export default function BookingReminderButton({ centres }) {
             </>
           )}
           {reminders && reminders.length === 0 && (
-            <p style={{ color: "var(--ink-muted)", margin: "var(--space-sm) 0 0", fontSize: "0.8125rem" }}>
+            <p style={{ color: "var(--ink-muted)", margin: "var(--space-sm) 0 0", fontSize: "0.875rem" }}>
               {t("noReminders")}
             </p>
           )}

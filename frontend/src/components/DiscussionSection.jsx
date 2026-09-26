@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api.js";
 import { useLang } from "../i18n.jsx";
 import { MentionText, MentionField } from "../mentions.jsx";
@@ -92,12 +92,45 @@ function OverflowMenu({ items }) {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [confirmingAt, setConfirmingAt] = useState(null);
+  const rootRef = useRef(null);
+  const btnRef = useRef(null);
   const visible = items.filter(Boolean);
+
+  // Close on outside click or Escape -- NOT on mouseleave, which closed
+  // the menu mid-reach (cursor crossing the gap from the button) and
+  // never fired at all on touch screens.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) {
+        setOpen(false);
+        setConfirmingAt(null);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setConfirmingAt(null);
+        btnRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (visible.length === 0) return null;
   return (
-    <div className="overflow-menu">
+    <div className={`overflow-menu${open ? " overflow-menu--open" : ""}`} ref={rootRef}>
       <button
-        aria-label="More actions"
+        ref={btnRef}
+        type="button"
+        aria-label={t("moreActions")}
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => {
           setOpen((o) => !o);
           setConfirmingAt(null);
@@ -106,16 +139,12 @@ function OverflowMenu({ items }) {
         •••
       </button>
       {open && (
-        <div
-          className="overflow-menu__panel popover"
-          onMouseLeave={() => {
-            setOpen(false);
-            setConfirmingAt(null);
-          }}
-        >
+        <div className="overflow-menu__panel popover" role="menu">
           {visible.map((it, i) => (
             <button
               key={i}
+              type="button"
+              role="menuitem"
               className={it.danger ? "danger" : undefined}
               onClick={() => {
                 if (it.danger && confirmingAt !== i) {
@@ -562,7 +591,7 @@ function Composer({ centres, username, initial, onClose, onPosted }) {
         <label>{t("addPhoto")}</label>
         <input type="file" accept="image/*" onChange={pickImage} style={{ marginTop: 4, fontSize: "0.85em", border: "none", padding: 0 }} />
 
-        {error && <p style={{ color: "var(--confirmed)", fontSize: "0.85em" }}>{error}</p>}
+        {error && <p style={{ color: "var(--danger)", fontSize: "0.85em" }}>{error}</p>}
 
         <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginTop: 12 }}>
           {t("postConsent")}{" "}
@@ -660,8 +689,10 @@ export default function DiscussionSection({ centres, username, isAdmin }) {
   const [openPost, setOpenPost] = useState(null);
   const [composerOpen, setComposerOpen] = useState(initialParams.get("compose") === "1");
   const [toast, setToast] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   function load() {
+    setError(null);
     api
       .getDiscussions({ centreId: centreFilter || null, testType: typeFilter || null, postType: categoryFilter || null, sort })
       .then(setPosts)
@@ -728,85 +759,120 @@ export default function DiscussionSection({ centres, username, isAdmin }) {
     );
   }
 
+  const activeFilterCount = [centreFilter, typeFilter, categoryFilter].filter(Boolean).length;
+
   return (
-    <div className="discussion-shell discussion-shell--with-rail">
+    <div className="discussion-shell">
       <div>
         <div className="discussion-header">
-          <h1 style={{ marginBottom: 0 }}>{t("discussion")}</h1>
-          <p>{t("discussionSub")}</p>
-        </div>
-
-        <div className="discussion-toolbar">
-          <div className="discussion-toolbar__filters">
-            <div className="segmented">
-              <button aria-pressed={typeFilter === ""} onClick={() => setTypeFilter("")}>{t("filterAll")}</button>
-              <button aria-pressed={typeFilter === "G"} onClick={() => setTypeFilter("G")}>G</button>
-              <button aria-pressed={typeFilter === "G2"} onClick={() => setTypeFilter("G2")}>G2</button>
-            </div>
-            <div className="segmented">
-              <button aria-pressed={categoryFilter === ""} onClick={() => setCategoryFilter("")}>{t("filterAll")}</button>
-              <button aria-pressed={categoryFilter === "question"} onClick={() => setCategoryFilter("question")}>{t("filterQuestions")}</button>
-              <button aria-pressed={categoryFilter === "experience"} onClick={() => setCategoryFilter("experience")}>{t("filterExperiences")}</button>
-              <button aria-pressed={categoryFilter === "tip"} onClick={() => setCategoryFilter("tip")}>{t("filterTips")}</button>
-            </div>
-            <select value={centreFilter} onChange={(e) => setCentreFilter(e.target.value)} aria-label={t("allCentres")}>
-              <option value="">{t("allCentres")}</option>
-              {centres.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label={t("sortLabel")}>
-              <option value="newest">{t("sortNewest")}</option>
-              <option value="top">{t("sortTop")}</option>
-              <option value="discussed">{t("sortDiscussed")}</option>
-            </select>
+          <div>
+            <h1>{t("discussionTitle")}</h1>
+            <p>{t("discussionSub")}</p>
           </div>
-          <span className="discussion-toolbar__spacer" />
-          <button className="btn-primary" onClick={() => setComposerOpen(true)}>
-            + {t("createPost")}
+          <button type="button" className="btn-primary" onClick={() => setComposerOpen(true)}>
+            {t("createPost")}
           </button>
         </div>
 
-        {error && <p className="error-banner">{t("error")}: {error}</p>}
-
-        {posts && posts.length === 0 && anyFilterActive && (
-          <div className="empty-state">
-            <h3>{t("emptyFilteredTitle")}</h3>
-            <button onClick={clearFilters}>{t("clearFilters")}</button>
+        <div className={`filter-toolbar${filtersOpen ? " filter-toolbar--open" : ""}`}>
+          <div className="filter-toolbar__primary">
+            <div className="seg" role="group" aria-label={t("testClass")}>
+              <button type="button" aria-pressed={typeFilter === ""} onClick={() => setTypeFilter("")}>{t("filterAll")}</button>
+              <button type="button" aria-pressed={typeFilter === "G"} onClick={() => setTypeFilter("G")}>G</button>
+              <button type="button" aria-pressed={typeFilter === "G2"} onClick={() => setTypeFilter("G2")}>G2</button>
+            </div>
+            <label className="filter-toolbar__sort">
+              <span className="visually-hidden">{t("sortLabel")}</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value)}>
+                <option value="newest">{t("sortNewest")}</option>
+                <option value="top">{t("sortTop")}</option>
+                <option value="discussed">{t("sortDiscussed")}</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className="filter-toolbar__more"
+              aria-expanded={filtersOpen}
+              aria-controls="more-filters"
+              onClick={() => setFiltersOpen((o) => !o)}
+            >
+              {t("filters")}
+              {activeFilterCount > 0 && <span className="count-dot">{activeFilterCount}</span>}
+            </button>
           </div>
-        )}
-        {posts && posts.length === 0 && !anyFilterActive && (
-          <div className="empty-state">
-            <h3>{t("emptyBoardTitle")}</h3>
-            <p>{t("emptyBoardBody")}</p>
-            {username && <button className="btn-primary" onClick={() => setComposerOpen(true)}>{t("startDiscussion")}</button>}
+          <div className="filter-toolbar__secondary" id="more-filters">
+            <div className="seg" role="group" aria-label={t("category")}>
+              <button type="button" aria-pressed={categoryFilter === ""} onClick={() => setCategoryFilter("")}>{t("allCategories")}</button>
+              <button type="button" aria-pressed={categoryFilter === "question"} onClick={() => setCategoryFilter("question")}>{t("filterQuestions")}</button>
+              <button type="button" aria-pressed={categoryFilter === "experience"} onClick={() => setCategoryFilter("experience")}>{t("filterExperiences")}</button>
+              <button type="button" aria-pressed={categoryFilter === "tip"} onClick={() => setCategoryFilter("tip")}>{t("filterTips")}</button>
+            </div>
+            <label className="filter-toolbar__centre">
+              <span className="visually-hidden">{t("centre")}</span>
+              <select value={centreFilter} onChange={(e) => setCentreFilter(e.target.value)}>
+                <option value="">{t("allCentres")}</option>
+                {centres.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            {anyFilterActive && (
+              <button type="button" className="link-btn" onClick={clearFilters}>
+                {t("clearFilters")}
+              </button>
+            )}
           </div>
-        )}
-
-        {posts && posts.map((p, i) => (
-          <PostCard
-            key={p.id}
-            post={p}
-            username={username}
-            isAdmin={isAdmin}
-            onChanged={load}
-            onOpen={openPostById}
-            onFilterCentre={setCentreFilter}
-            onFilterType={setTypeFilter}
-            index={i}
-          />
-        ))}
-      </div>
-
-      <div className="discussion-rail">
-        <div className="card">
-          <h3>{t("discussion")}</h3>
-          <ul>
-            <li>{t("filterQuestions")}, {t("filterExperiences").toLowerCase()}, {t("filterTips").toLowerCase()}.</li>
-            <li>Keep it useful and specific to Ontario driving tests.</li>
-            <li>Vote on what's accurate and helpful.</li>
-          </ul>
         </div>
+
+        {error && (
+          <div className="state-panel state-panel--error" role="alert">
+            <p>{t("postsLoadFailed")}</p>
+            <button type="button" onClick={load}>{t("retry")}</button>
+          </div>
+        )}
+
+        {!error && posts === null && (
+          <div aria-busy="true">
+            <div className="skeleton-block" />
+            <div className="skeleton-block" />
+          </div>
+        )}
+
+        {!error && posts && posts.length === 0 && anyFilterActive && (
+          <div className="empty-state">
+            <h2>{t("emptyFilteredTitle")}</h2>
+            <p>{t("emptyFilteredBody")}</p>
+            <button type="button" onClick={clearFilters}>{t("clearFilters")}</button>
+          </div>
+        )}
+        {!error && posts && posts.length === 0 && !anyFilterActive && (
+          <div className="empty-state">
+            <h2>{t("emptyBoardTitle")}</h2>
+            <p>{t("emptyBoardBody")}</p>
+            {username && <button type="button" className="btn-primary" onClick={() => setComposerOpen(true)}>{t("askFirstQuestion")}</button>}
+          </div>
+        )}
+
+        {!error && posts && posts.length > 0 && (
+          <div className="post-feed">
+            {posts.map((p, i) => (
+              <PostCard
+                key={p.id}
+                post={p}
+                username={username}
+                isAdmin={isAdmin}
+                onChanged={load}
+                onOpen={openPostById}
+                onFilterCentre={setCentreFilter}
+                onFilterType={setTypeFilter}
+                index={i}
+              />
+            ))}
+            <p className="post-feed__guidelines">
+              {t("guidelinesShort")} <a href="/terms-of-service.html">{t("communityGuidelines")}</a>
+            </p>
+          </div>
+        )}
       </div>
 
       {composerOpen && username && (

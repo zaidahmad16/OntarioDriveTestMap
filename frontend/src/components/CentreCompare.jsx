@@ -1,58 +1,76 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../api.js";
 import { useLang } from "../i18n.jsx";
+import { ChevronDownIcon } from "../Icons.jsx";
 
-function formatKm(m) {
+function formatKm(m, lang) {
   if (m == null) return "—";
-  return `${(m / 1000).toFixed(1)} km`;
+  return `${new Intl.NumberFormat(lang === "fr" ? "fr-CA" : "en-CA", { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(m / 1000)} km`;
 }
 
-// Real distance/duration/maneuver-count stats, confirmed routes only.
-// No pass-rate column: this app has no pass/fail data, so it's left out
-// rather than invented (matches backend's compare_centres note).
+// Real distance and step-count averages over confirmed routes only
+// (backend compare_centres). No pass-rate column: the app has no
+// pass/fail data, so none is invented. A quiet secondary section, not
+// the homepage's headline feature (spec §4).
 export default function CentreCompare() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
-  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!open || rows) return;
+  function load() {
+    setError(null);
     api.compareCentres().then(setRows).catch((err) => setError(err.message));
-  }, [open, rows]);
+  }
 
   return (
-    <div style={{ margin: "var(--space-md) 0" }}>
-      <button onClick={() => setOpen((o) => !o)}>
-        {t("compareCentres")} {open ? "▲" : "▼"}
-      </button>
-      {open && error && <p className="error-banner" style={{ marginTop: "var(--space-sm)" }}>{error}</p>}
-      {open && rows && (
-        <div className="card fade-in" style={{ marginTop: "var(--space-sm)", padding: 0, overflow: "hidden" }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t("centre")}</th>
-                <th>{t("confirmedRoutes")}</th>
-                <th>{t("avgDistance")}</th>
-                <th>{t("avgManeuvers")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td className="data" style={{ color: "var(--confirmed)" }}>
-                    {r.confirmed_route_count}
-                  </td>
-                  <td className="data">{formatKm(r.avg_distance_m)}</td>
-                  <td className="data">{r.avg_maneuver_count ?? "—"}</td>
+    <section className="compare" aria-labelledby="compare-title">
+      <details
+        className="disclosure compare__details"
+        onToggle={(e) => {
+          if (e.currentTarget.open && !rows) load();
+        }}
+      >
+        <summary>
+          <span id="compare-title">{t("compareCentres")}</span>
+          <span className="compare__hint">{t("compareHint")}</span>
+          <ChevronDownIcon className="disclosure__chevron" />
+        </summary>
+        {error && (
+          <div className="state-panel state-panel--error" role="alert">
+            <p>{error}</p>
+            <button type="button" onClick={load}>
+              {t("retry")}
+            </button>
+          </div>
+        )}
+        {!rows && !error && <p className="muted">{t("loading")}</p>}
+        {rows && (
+          <div className="compare__table-wrap">
+            <table className="data-table compare__table">
+              <thead>
+                <tr>
+                  <th scope="col">{t("centre")}</th>
+                  <th scope="col">{t("confirmedRoutes")}</th>
+                  <th scope="col">{t("avgDistance")}</th>
+                  <th scope="col">{t("avgSteps")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+              </thead>
+              <tbody>
+                {rows
+                  .filter((r) => r.confirmed_route_count > 0)
+                  .map((r) => (
+                    <tr key={r.id}>
+                      <th scope="row">{r.name}</th>
+                      <td className="data">{r.confirmed_route_count}</td>
+                      <td className="data">{formatKm(r.avg_distance_m, lang)}</td>
+                      <td className="data">{r.avg_maneuver_count ?? "—"}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </details>
+    </section>
   );
 }

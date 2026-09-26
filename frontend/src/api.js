@@ -1,8 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Dev-only guest preview: `?devGuest=1` makes this tab call the API
+// without the session cookie, so logged-out views can be checked while
+// signed in elsewhere. import.meta.env.DEV is false in production builds,
+// so none of this ships.
+const DEV_GUEST = (() => {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  try {
+    if (new URLSearchParams(window.location.search).has("devGuest")) sessionStorage.setItem("devGuest", "1");
+    return sessionStorage.getItem("devGuest") === "1";
+  } catch {
+    return false;
+  }
+})();
+const CREDENTIALS = DEV_GUEST ? "omit" : "include";
+
 async function request(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, {
-    credentials: "include", // required to send/receive the httpOnly session cookie
+    credentials: CREDENTIALS, // "include" in production: sends the httpOnly session cookie
     headers: { "Content-Type": "application/json" },
     ...options,
   });
@@ -18,7 +33,7 @@ function uploadImage(path, file) {
   form.append("file", file);
   return fetch(`${API_URL}${path}`, {
     method: "POST",
-    credentials: "include",
+    credentials: CREDENTIALS,
     body: form, // no Content-Type header -- the browser sets the multipart boundary itself
   }).then(async (res) => {
     if (!res.ok) {
@@ -58,6 +73,7 @@ export const api = {
   getCentre: (id) => request(`/centres/${id}`),
   getMap: (id) => request(`/centres/${id}/map`),
   getTraces: (id) => request(`/centres/${id}/traces`),
+  getEvidenceSummary: (id) => request(`/centres/${id}/evidence-summary`),
   getTrace: (id) => request(`/traces/${id}`),
   compareCentres: () => request(`/centres/compare`),
   reportError: (routeLineId, stepOrder, note) =>

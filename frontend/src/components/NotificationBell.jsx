@@ -77,7 +77,7 @@ export default function NotificationBell({ signedIn }) {
             <span>{t("notifications")}</span>
             <button onClick={markAllRead}>{t("markAllRead")}</button>
           </div>
-          {error && <p className="popover-empty" style={{ color: "var(--confirmed)" }}>{error}</p>}
+          {error && <p className="popover-empty" style={{ color: "var(--danger)" }}>{error}</p>}
           {notifications === null && <p className="popover-empty">{t("loading")}</p>}
           {notifications && notifications.length === 0 && (
             <p className="popover-empty">{t("noNotifications")}</p>

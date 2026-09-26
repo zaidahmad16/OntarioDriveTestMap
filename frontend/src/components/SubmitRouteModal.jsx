@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Login from "./Login.jsx";
 import { api } from "../api.js";
 import { useLang } from "../i18n.jsx";
 
@@ -42,52 +43,25 @@ function freshWizard() {
   };
 }
 
-// A real 4-step sequence where the order carries information (each step
-// depends on the last) -- exactly the case where a numbered progress
-// indicator earns its place rather than being decorative scaffolding.
+// Named stepper (spec §8): each step says what it is, not just a dot.
+// The order carries information (each step depends on the last).
+const STEP_NAMES = ["stepNameCentre", "stepNameClass", "stepNameStreets", "stepNameReview"];
+
 function StepIndicator({ step }) {
   const { t } = useLang();
   return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: "var(--space-lg)" }}>
-      {STEPS.map((key, i) => {
+    <ol className="stepper" aria-label={t("wizardStepOf").replace("{n}", step)}>
+      {STEP_NAMES.map((key, i) => {
         const n = i + 1;
         const state = n === step ? "current" : n < step ? "done" : "upcoming";
         return (
-          <div key={key} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : "none" }}>
-            <div
-              className="data"
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "0.8125rem",
-                fontWeight: 700,
-                flexShrink: 0,
-                transition: "background-color var(--duration-base) var(--ease-out-quart), color var(--duration-base) var(--ease-out-quart)",
-                background: state === "upcoming" ? "var(--surface-sunken)" : "var(--accent)",
-                color: state === "upcoming" ? "var(--ink-faint)" : "#fff",
-              }}
-            >
-              {state === "done" ? "✓" : n}
-            </div>
-            {i < STEPS.length - 1 && (
-              <div
-                style={{
-                  flex: 1,
-                  height: 2,
-                  margin: "0 6px",
-                  background: n < step ? "var(--accent)" : "var(--border)",
-                  transition: "background-color var(--duration-base) var(--ease-out-quart)",
-                }}
-              />
-            )}
-          </div>
+          <li key={key} className={`stepper__step stepper__step--${state}`} aria-current={state === "current" ? "step" : undefined}>
+            <span className="stepper__num" aria-hidden="true">{state === "done" ? "✓" : n}</span>
+            <span className="stepper__name">{t(key)}</span>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }
 
@@ -103,8 +77,13 @@ function StepIndicator({ step }) {
 // string. That parsing approach was fragile (a street name with a
 // quote in it, or any mismatch in the message format, would silently
 // break the highlighting); this way there's nothing to parse.
-export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
+export default function SubmitRouteModal({ open, onClose, centres, signedIn, defaultCentreId, onLogin }) {
   const { t } = useLang();
+  const panelRef = useRef(null);
+  const headingRef = useRef(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [signedInHere, setSignedInHere] = useState(false);
+  const isSignedIn = signedIn || signedInHere;
   const [w, setW] = useState(freshWizard);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
@@ -113,13 +92,29 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
 
   useEffect(() => {
     if (!open) return;
-    setW(freshWizard());
+    setW({ ...freshWizard(), centreChoice: defaultCentreId || "" });
     setError(null);
     setSent(false);
-    if (signedIn) {
-      api.getSubmissions().then(setSubmissions).catch(() => {});
-    }
-  }, [open, signedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (open && isSignedIn) api.getSubmissions().then(setSubmissions).catch(() => {});
+  }, [open, isSignedIn]);
+
+  // WAI-ARIA modal pattern: focus the heading on open, keep Tab inside,
+  // Escape asks before discarding a draft, focus returns to the trigger.
+  useEffect(() => {
+    if (!open) return;
+    const trigger = document.activeElement;
+    headingRef.current?.focus();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      if (trigger && typeof trigger.focus === "function") trigger.focus();
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -129,6 +124,34 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
 
   function patch(fields) {
     setW((s) => ({ ...s, ...fields }));
+  }
+
+  const hasDraft = !sent && (w.confirmedTurns.length > 0 || w.pendingStreet.trim() || (w.step > 1 && centreName));
+
+  function requestClose() {
+    if (hasDraft) setConfirmClose(true);
+    else onClose();
+  }
+
+  function onKeyDown(e) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      if (confirmClose) setConfirmClose(false);
+      else requestClose();
+    }
+    if (e.key === "Tab" && panelRef.current) {
+      const f = panelRef.current.querySelectorAll('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!f.length) return;
+      const first = f[0];
+      const last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === headingRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
   }
 
   function addStreet() {
@@ -182,21 +205,58 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-panel" onClick={(e) => e.stopPropagation()} style={{ padding: "var(--space-lg)", width: 520, maxWidth: "92vw" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "var(--space-md)" }}>
-          <h3 style={{ margin: 0 }}>{t("submitRoute")}</h3>
-          <button onClick={onClose}>{t("close")}</button>
+    <div className="modal-backdrop wizard-backdrop" onMouseDown={(e) => e.target === e.currentTarget && requestClose()}>
+      <div
+        className="modal-panel wizard"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wizard-title"
+        ref={panelRef}
+        onKeyDown={onKeyDown}
+      >
+        <div className="wizard__head">
+          <div>
+            <h2 id="wizard-title" ref={headingRef} tabIndex={-1}>
+              {t("submitRoute")}
+            </h2>
+            <p className="wizard__motivation">{t("submissionMotivation")}</p>
+          </div>
+          <button type="button" onClick={requestClose}>
+            {t("close")}
+          </button>
         </div>
 
-        {!signedIn ? (
-          <p>{t("signInForSubmit")}</p>
+        {confirmClose && (
+          <div className="wizard__confirm" role="alertdialog" aria-labelledby="discard-title">
+            <p id="discard-title">{t("discardDraftQuestion")}</p>
+            <div className="form-actions">
+              <button type="button" className="btn-danger" onClick={onClose}>
+                {t("discardDraft")}
+              </button>
+              <button type="button" onClick={() => setConfirmClose(false)}>
+                {t("keepEditing")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isSignedIn ? (
+          <div className="wizard__signin">
+            <p>{t("signInForSubmit")}</p>
+            <Login
+              onLogin={(u) => {
+                setSignedInHere(true);
+                onLogin?.(u);
+              }}
+            />
+          </div>
         ) : (
           <>
             {w.step === 1 && (
-              <p className="notice-banner" style={{ marginBottom: "var(--space-md)" }}>
-                {t("submissionImportanceNote")}
-              </p>
+              <details className="disclosure wizard__why">
+                <summary>{t("whySubmissionsHelp")}</summary>
+                <p>{t("submissionImportanceNote")}</p>
+              </details>
             )}
             <StepIndicator step={w.step} />
 
@@ -298,7 +358,7 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
                     onChange={(e) => patch({ pendingStreet: e.target.value, addError: null })}
                     onKeyDown={(e) => e.key === "Enter" && addStreet()}
                     placeholder={t("streetName")}
-                    style={{ flex: "1 1 160px", borderColor: w.addError ? "var(--confirmed)" : undefined }}
+                    style={{ flex: "1 1 160px", borderColor: w.addError ? "var(--danger)" : undefined }}
                   />
                   <select
                     value={w.pendingJunctionType}
@@ -317,7 +377,7 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
                 </div>
                 <p style={{ fontSize: "0.8125rem", color: "var(--ink-muted)", margin: "6px 0 0" }}>{t("atJunctionHint")}</p>
                 {w.addError && (
-                  <p className="rise-in" style={{ color: "var(--confirmed)", fontSize: "0.875rem", marginTop: 6 }}>
+                  <p className="rise-in" style={{ color: "var(--danger)", fontSize: "0.875rem", marginTop: 6 }}>
                     {w.addError}
                   </p>
                 )}
@@ -382,7 +442,7 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
                   </button>
                 </div>
                 {error && (
-                  <p className="rise-in" style={{ color: "var(--confirmed)", fontSize: "0.875rem", marginTop: 8 }}>
+                  <p className="rise-in" style={{ color: "var(--danger)", fontSize: "0.875rem", marginTop: 8 }}>
                     {error}
                   </p>
                 )}
@@ -410,7 +470,7 @@ export default function SubmitRouteModal({ open, onClose, centres, signedIn }) {
                     >
                       {sub.centre_name} — {sub.test_class} — <span className="data">{new Date(sub.created_at).toLocaleDateString()}</span>{" "}
                       <span className={`trust-badge trust-badge--${sub.status === "promoted" ? "success" : "gap"}`}>
-                        {sub.status === "promoted" ? "✓ promoted to official route" : "pending corroboration"}
+                        {sub.status === "promoted" ? t("submissionPromoted") : t("submissionPending")}
                       </span>
                     </li>
                   ))}

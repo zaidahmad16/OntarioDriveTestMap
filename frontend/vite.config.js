@@ -10,7 +10,22 @@ import react from "@vitejs/plugin-react";
 // entry script (src/main.jsx vs src/discussion-main.jsx).
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // Phone testing over an HTTPS tunnel (cloudflared quick tunnel):
+    // start a second dev server with VITE_API_URL=/api so the page and
+    // API share one origin (no CORS, first-party cookie), and allow the
+    // tunnel's random hostname. Dev server only; production builds are
+    // unaffected.
+    allowedHosts: [".trycloudflare.com"],
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
   build: {
     rollupOptions: {
       input: {
